@@ -302,6 +302,68 @@ def generate_character(req: GenerateRequest):
         lowered = value.strip().lower()
         return lowered in {"", "unspecified", "none", "null", "tbd", "n/a", "unknown"}
 
+    def coerce_int(val):
+        try:
+            return int(val)
+        except Exception:
+            return None
+
+    class_display = {
+        "barbarian": "Barbarian",
+        "bard": "Bard",
+        "cleric": "Cleric",
+        "druid": "Druid",
+        "fighter": "Fighter",
+        "monk": "Monk",
+        "paladin": "Paladin",
+        "ranger": "Ranger",
+        "rogue": "Rogue",
+        "sorcerer": "Sorcerer",
+        "warlock": "Warlock",
+        "wizard": "Wizard",
+        "artificer": "Artificer",
+    }
+
+    default_subclass = {
+        "barbarian": "Path of the Berserker",
+        "bard": "College of Lore",
+        "cleric": "Life Domain",
+        "druid": "Circle of the Land",
+        "fighter": "Battle Master",
+        "monk": "Way of the Open Hand",
+        "paladin": "Oath of Devotion",
+        "ranger": "Hunter",
+        "rogue": "Thief",
+        "sorcerer": "Draconic Bloodline",
+        "warlock": "The Fiend",
+        "wizard": "School of Evocation",
+        "artificer": "Alchemist",
+    }
+
+    def class_key_from_text(value: Optional[str]) -> str:
+        text = (value or "").strip().lower()
+        for key in class_display:
+            if key in text:
+                return key
+        return ""
+
+    def choose_class_from_stats(stats_data: dict) -> str:
+        values = {}
+        for abil in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
+            values[abil] = coerce_int(stats_data.get(abil)) or 10
+        dominant = max(values, key=values.get)
+        if dominant == "INT":
+            return "wizard"
+        if dominant == "CHA":
+            return "bard"
+        if dominant == "WIS":
+            return "cleric"
+        if dominant == "STR":
+            return "fighter"
+        if dominant == "DEX":
+            return "rogue"
+        return "fighter"
+
     def missing_required_fields(parsed_obj: dict) -> list[str]:
         missing = []
         required_text = ["name", "race", "class", "subclass", "background", "alignment", "short_blurb"]
@@ -336,11 +398,15 @@ def generate_character(req: GenerateRequest):
                 return 0
 
         class_name = str(parsed_obj.get("class") or "").strip().lower()
+        requested_class_key = class_key_from_text(req.dnd_class)
+        parsed_class_key = class_key_from_text(class_name)
         level_val = coerce_int(parsed_obj.get("level"))
         entity_type = (req.entity_type or "character").strip().lower()
 
-        if entity_type in {"character", "npc"} and class_name in {"", "enemy"}:
+        if entity_type in {"character", "npc"} and parsed_class_key == "":
             issues.append("class")
+        if requested_class_key and parsed_class_key and requested_class_key != parsed_class_key:
+            issues.append("class_mismatch")
 
         class_requirements = {
             "barbarian": [{"STR": 13}],
@@ -359,7 +425,7 @@ def generate_character(req: GenerateRequest):
         }
 
         for cls, req_sets in class_requirements.items():
-            if cls in class_name:
+            if cls in parsed_class_key:
                 valid = False
                 for req_set in req_sets:
                     if all(stat(abil) >= minimum for abil, minimum in req_set.items()):
@@ -412,13 +478,6 @@ def generate_character(req: GenerateRequest):
                 }
             )
 
-    # Validate and normalize parsed JSON
-    def coerce_int(val):
-        try:
-            return int(val)
-        except Exception:
-            return None
-
     sheet_json = None
     stats_obj = parsed.get("stats") or {}
     if not isinstance(stats_obj, dict):
@@ -439,7 +498,29 @@ def generate_character(req: GenerateRequest):
             val = 10  # default to average if missing
         stats_norm[k] = val
 
-    cls_lower = (parsed.get("class") or "").lower()
+    entity_type = (req.entity_type or "character").strip().lower()
+    requested_class_key = class_key_from_text(req.dnd_class)
+    parsed_class_key = class_key_from_text(parsed.get("class"))
+    if entity_type == "enemy":
+        class_key = "enemy"
+    elif requested_class_key:
+        class_key = requested_class_key
+    elif parsed_class_key:
+        class_key = parsed_class_key
+    else:
+        class_key = choose_class_from_stats(stats_norm)
+
+    class_name = "enemy" if class_key == "enemy" else class_display.get(class_key, "Fighter")
+    cls_lower = class_name.lower()
+
+    subclass_name = parsed.get("subclass")
+    if class_key == "enemy":
+        if is_placeholder_text(subclass_name):
+            subclass_name = "Humanoid"
+    else:
+        if is_placeholder_text(subclass_name):
+            subclass_name = default_subclass.get(class_key, "Adventurer")
+
     # Enforce multiclass ability minimums (PHB)
     class_min = {
         "barbarian": {"STR": 13},
@@ -670,11 +751,6 @@ def generate_character(req: GenerateRequest):
         spell_save_dc = 8 + pb + spell_mod
         spell_attack_bonus = pb + spell_mod
 
-    class_name = parsed.get("class")
-    if isinstance(class_name, str) and ("/" in class_name or "(" in class_name) and "multiclass" not in (question.lower()):
-        # force single class by taking first token
-        class_name = class_name.split("/")[0].split("(")[0].strip()
-
     # Apply saving throw profs from JSON if provided
     if saving_throw_profs:
         save_profs = {s.upper() for s in saving_throw_profs}
@@ -687,7 +763,7 @@ def generate_character(req: GenerateRequest):
     sheet_json = {
         "name": parsed.get("name"),
         "class": class_name,
-        "subclass": parsed.get("subclass"),
+        "subclass": subclass_name,
         "level": level,
         "race": race,
         "background": background,
