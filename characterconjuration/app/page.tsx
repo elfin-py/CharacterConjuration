@@ -190,19 +190,49 @@ export default function HomePage() {
 
     if (builderType === "character") {
       if (effectiveRollMode === "manual") {
-        body.manual_rolls = manualRolls
+        const cleanedRolls = manualRolls
           .map((v) => v.trim())
           .filter((v) => v !== "")
           .map((v) => Number(v));
+        if (cleanedRolls.length !== 6 || cleanedRolls.some((v) => Number.isNaN(v) || v < 3 || v > 18)) {
+          setLoading(false);
+          setError("Manual mode needs exactly 6 rolls between 3 and 18.");
+          return;
+        }
+        body.manual_rolls = cleanedRolls;
 
-        body.ability_assignment = Object.fromEntries(
+        const enteredAssignments = Object.fromEntries(
           Object.entries(abilities)
             .filter(([, v]) => v.trim() !== "")
             .map(([k, v]) => [k, Number(v)]),
-        );
+        ) as Record<string, number>;
+        const assignmentCount = Object.keys(enteredAssignments).length;
+        if (assignmentCount !== 0 && assignmentCount !== 6) {
+          setLoading(false);
+          setError("Fill all six ability assignments or leave all blank.");
+          return;
+        }
+        if (assignmentCount === 6) {
+          const assignmentVals = Object.values(enteredAssignments).sort((a, b) => a - b);
+          const rollVals = [...cleanedRolls].sort((a, b) => a - b);
+          if (assignmentVals.join(",") !== rollVals.join(",")) {
+            setLoading(false);
+            setError("Assigned abilities must use exactly the six rolled values.");
+            return;
+          }
+          body.ability_assignment = enteredAssignments;
+        } else {
+          body.ability_assignment = Object.fromEntries(
+            abilityKeys.map((k, i) => [k, cleanedRolls[i]]),
+          );
+        }
       }
 
       if (effectiveRollMode === "standard_array") {
+        body.manual_rolls = [15, 14, 13, 12, 10, 8];
+        body.ability_assignment = null;
+      }
+      if (effectiveRollMode === "auto") {
         body.manual_rolls = null;
         body.ability_assignment = null;
       }

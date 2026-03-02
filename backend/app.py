@@ -104,6 +104,77 @@ class SheetRequest(BaseModel):
     sheet_json: dict
 
 
+ABILITY_KEYS = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+STANDARD_ARRAY = [15, 14, 13, 12, 10, 8]
+
+
+def normalize_roll_inputs(req: GenerateRequest) -> None:
+    """Validate and normalize roll inputs so all roll modes behave consistently."""
+    mode = (req.roll_mode or "auto").strip().lower()
+    if mode not in {"auto", "standard_array", "manual"}:
+        raise HTTPException(status_code=400, detail="roll_mode must be one of auto, standard_array, manual")
+
+    def parse_int_list(values: Optional[List[int]]) -> List[int]:
+        out: List[int] = []
+        for v in values or []:
+            try:
+                out.append(int(v))
+            except Exception:
+                raise HTTPException(status_code=400, detail="manual_rolls must contain integers")
+        return out
+
+    def parse_assignment(values: Optional[Dict[str, int]]) -> Dict[str, int]:
+        out: Dict[str, int] = {}
+        for k, v in (values or {}).items():
+            key = str(k).strip().upper()
+            if key not in ABILITY_KEYS:
+                raise HTTPException(status_code=400, detail=f"ability_assignment contains invalid ability key: {k}")
+            try:
+                out[key] = int(v)
+            except Exception:
+                raise HTTPException(status_code=400, detail=f"ability_assignment value for {k} must be an integer")
+        return out
+
+    req.roll_mode = mode
+
+    if mode == "auto":
+        req.manual_rolls = None
+        req.ability_assignment = None
+        return
+
+    if mode == "standard_array":
+        assignment = parse_assignment(req.ability_assignment)
+        if assignment:
+            if set(assignment.keys()) != set(ABILITY_KEYS):
+                raise HTTPException(status_code=400, detail="ability_assignment must include all six abilities for standard_array")
+            if sorted(assignment.values()) != sorted(STANDARD_ARRAY):
+                raise HTTPException(status_code=400, detail="ability_assignment must use standard array values only")
+            req.ability_assignment = assignment
+        else:
+            req.ability_assignment = None
+        req.manual_rolls = STANDARD_ARRAY.copy()
+        return
+
+    # manual mode
+    rolls = parse_int_list(req.manual_rolls)
+    if len(rolls) != 6:
+        raise HTTPException(status_code=400, detail="manual_rolls must contain exactly 6 values for manual mode")
+    if any(v < 3 or v > 18 for v in rolls):
+        raise HTTPException(status_code=400, detail="manual_rolls values must be between 3 and 18")
+
+    assignment = parse_assignment(req.ability_assignment)
+    if assignment:
+        if set(assignment.keys()) != set(ABILITY_KEYS):
+            raise HTTPException(status_code=400, detail="ability_assignment must include all six abilities for manual mode")
+        if sorted(assignment.values()) != sorted(rolls):
+            raise HTTPException(status_code=400, detail="ability_assignment values must exactly match manual_rolls")
+        req.ability_assignment = assignment
+    else:
+        # Deterministic fallback: assign in STR..CHA order
+        req.ability_assignment = {ability: rolls[i] for i, ability in enumerate(ABILITY_KEYS)}
+    req.manual_rolls = rolls
+
+
 def build_question(req: GenerateRequest) -> str:
     """Turn the user choices into a single natural language prompt."""
     bits = []
@@ -163,6 +234,7 @@ def build_question(req: GenerateRequest) -> str:
 
 @app.post("/generate_character")
 def generate_character(req: GenerateRequest):
+    normalize_roll_inputs(req)
     question = build_question(req)
 
     # Retrieve context from index (may be empty if index failed to load)
