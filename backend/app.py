@@ -325,6 +325,59 @@ def generate_character(req: GenerateRequest):
                     missing.append(f"stats.{abil}")
         return missing
 
+    def rules_validation_issues(parsed_obj: dict) -> list[str]:
+        issues = []
+        stats_obj = parsed_obj.get("stats") if isinstance(parsed_obj.get("stats"), dict) else {}
+
+        def stat(ability: str) -> int:
+            try:
+                return int(stats_obj.get(ability, 0))
+            except Exception:
+                return 0
+
+        class_name = str(parsed_obj.get("class") or "").strip().lower()
+        level_val = coerce_int(parsed_obj.get("level"))
+        entity_type = (req.entity_type or "character").strip().lower()
+
+        if entity_type in {"character", "npc"} and class_name in {"", "enemy"}:
+            issues.append("class")
+
+        class_requirements = {
+            "barbarian": [{"STR": 13}],
+            "bard": [{"CHA": 13}],
+            "cleric": [{"WIS": 13}],
+            "druid": [{"WIS": 13}],
+            "fighter": [{"STR": 13}, {"DEX": 13}],  # allow DEX route
+            "monk": [{"DEX": 13, "WIS": 13}],
+            "paladin": [{"STR": 13, "CHA": 13}],
+            "ranger": [{"DEX": 13, "WIS": 13}],
+            "rogue": [{"DEX": 13}],
+            "sorcerer": [{"CHA": 13}],
+            "warlock": [{"CHA": 13}],
+            "wizard": [{"INT": 13}],
+            "artificer": [{"INT": 13}],
+        }
+
+        for cls, req_sets in class_requirements.items():
+            if cls in class_name:
+                valid = False
+                for req_set in req_sets:
+                    if all(stat(abil) >= minimum for abil, minimum in req_set.items()):
+                        valid = True
+                        break
+                if not valid:
+                    issues.append("stats_for_class")
+                break
+
+        caster_classes = {"bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "warlock", "wizard", "artificer"}
+        spells_obj = parsed_obj.get("spells")
+        if level_val and level_val >= 1 and any(c in class_name for c in caster_classes):
+            has_spells = isinstance(spells_obj, dict) and any(isinstance(v, list) and len(v) > 0 for v in spells_obj.values())
+            if not has_spells:
+                issues.append("spells")
+
+        return issues
+
     raw = ""
     parsed = {}
     used_model = ""
@@ -339,16 +392,22 @@ def generate_character(req: GenerateRequest):
             )
         parsed = parse_json_or_fallback(raw)
         missing = missing_required_fields(parsed)
-        if not missing:
+        rule_issues = [] if missing else rules_validation_issues(parsed)
+        if not missing and not rule_issues:
             break
         if attempt == 0:
+            issue_parts = []
+            if missing:
+                issue_parts.append("missing required fields: " + ", ".join(missing))
+            if rule_issues:
+                issue_parts.append("rule validation issues: " + ", ".join(rule_issues))
             messages.append(
                 {
                     "role": "user",
                     "content": (
-                        "Regenerate STRICT JSON only. Previous output missed required fields: "
-                        + ", ".join(missing)
-                        + ". Ensure all required fields are non-null and properly typed."
+                        "Regenerate STRICT JSON only. Previous output had "
+                        + "; ".join(issue_parts)
+                        + ". Ensure all required fields are non-null, typed correctly, and mechanically legal."
                     ),
                 }
             )
