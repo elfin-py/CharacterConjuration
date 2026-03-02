@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0a0f;
+  --foreground: #f8f4e8;
+  --accent: #f5d76e;
+  --accent-2: #5bd7a8;
+  --panel: #11111b;
+  --panel-2: #161624;
+  --border: #f5d76e;
+}
+
+body {
+  background: radial-gradient(circle at 20% 20%, #1c1a2b 0, #0b0b13 35%, #07070d 70%), var(--background);
+  color: var(--foreground);
+  font-family: "Courier New", "Lucida Console", monospace;
+  text-rendering: geometricPrecision;
+}
+
+.pixel-border {
+  border: 3px solid var(--accent);
+  box-shadow: 4px 4px 0 #000000, 0 0 0 4px #111, inset 0 0 0 2px #000;
+}
+
+.pixel-btn {
+  border: 3px solid #000;
+  box-shadow: 4px 4px 0 #000000;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease;
+}
+
+.pixel-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #000000;
+}
