@@ -224,18 +224,9 @@ def generate_character(req: GenerateRequest):
         },
     ]
 
-    try:
-        raw, used_model = chat_with_fallback(messages)
-    except Exception as exc:
-        logger.exception("HF chat_completion failed")
-        raise HTTPException(
-            status_code=502,
-            detail=f"Upstream model error: {exc}. Configure HF_MODEL or HF_MODEL_CANDIDATES with supported chat models.",
-        )
-
     import json
+    import re
 
-    parsed = None
     def longest_balanced_prefix(text: str) -> str:
         brace = bracket = 0
         in_str = False
@@ -259,36 +250,34 @@ def generate_character(req: GenerateRequest):
             return text[: last_good + 1]
         return text
 
-    try:
-        parsed = json.loads(raw)
-    except Exception:
-        # try to extract first JSON object from the text
-        import re
-        m = re.search(r"\{.*", raw, re.S)
-        parsed = None
-        if m:
-            candidate = longest_balanced_prefix(m.group(0))
-            try:
-                parsed = json.loads(candidate)
-            except Exception:
-                parsed = None
-
-    if not isinstance(parsed, dict):
+    def parse_json_or_fallback(raw_text: str) -> dict:
+        parsed_obj = None
+        try:
+            parsed_obj = json.loads(raw_text)
+        except Exception:
+            # try to extract first JSON object from the text
+            m = re.search(r"\{.*", raw_text, re.S)
+            if m:
+                candidate = longest_balanced_prefix(m.group(0))
+                try:
+                    parsed_obj = json.loads(candidate)
+                except Exception:
+                    parsed_obj = None
+        if isinstance(parsed_obj, dict):
+            return parsed_obj
         # fallback: extract key fields with regex even if JSON malformed
-        import re
-
         def grab(key, default=None):
-            m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', raw, re.I)
+            m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', raw_text, re.I)
             return m.group(1) if m else default
 
         def grab_int(key, default=None):
-            m = re.search(rf'"{key}"\s*:\s*([0-9]+)', raw, re.I)
+            m = re.search(rf'"{key}"\s*:\s*([0-9]+)', raw_text, re.I)
             return int(m.group(1)) if m else default
 
         stats_obj = {}
         for k in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
             stats_obj[k] = grab_int(k)
-        parsed = {
+        return {
             "name": grab("name"),
             "race": grab("race"),
             "class": grab("class"),
@@ -306,6 +295,63 @@ def generate_character(req: GenerateRequest):
             "gender": grab("gender"),
             "age_group": grab("age_group"),
         }
+
+    def is_placeholder_text(value) -> bool:
+        if not isinstance(value, str):
+            return True
+        lowered = value.strip().lower()
+        return lowered in {"", "unspecified", "none", "null", "tbd", "n/a", "unknown"}
+
+    def missing_required_fields(parsed_obj: dict) -> list[str]:
+        missing = []
+        required_text = ["name", "race", "class", "subclass", "background", "alignment", "short_blurb"]
+        required_number = ["hp", "ac", "speed", "level"]
+        for key in required_text:
+            if is_placeholder_text(parsed_obj.get(key)):
+                missing.append(key)
+        for key in required_number:
+            try:
+                int(parsed_obj.get(key))
+            except Exception:
+                missing.append(key)
+        stats_obj = parsed_obj.get("stats")
+        if not isinstance(stats_obj, dict):
+            missing.append("stats")
+        else:
+            for abil in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
+                try:
+                    int(stats_obj.get(abil))
+                except Exception:
+                    missing.append(f"stats.{abil}")
+        return missing
+
+    raw = ""
+    parsed = {}
+    used_model = ""
+    for attempt in range(2):
+        try:
+            raw, used_model = chat_with_fallback(messages)
+        except Exception as exc:
+            logger.exception("HF chat_completion failed")
+            raise HTTPException(
+                status_code=502,
+                detail=f"Upstream model error: {exc}. Configure HF_MODEL or HF_MODEL_CANDIDATES with supported chat models.",
+            )
+        parsed = parse_json_or_fallback(raw)
+        missing = missing_required_fields(parsed)
+        if not missing:
+            break
+        if attempt == 0:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "Regenerate STRICT JSON only. Previous output missed required fields: "
+                        + ", ".join(missing)
+                        + ". Ensure all required fields are non-null and properly typed."
+                    ),
+                }
+            )
 
     # Validate and normalize parsed JSON
     def coerce_int(val):
