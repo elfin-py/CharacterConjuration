@@ -644,7 +644,7 @@ def generate_character(req: GenerateRequest):
         elif stats_norm["STR"] < 13 and stats_norm["DEX"] < 13:
             stats_norm["DEX"] = 13
 
-    hp = coerce_int(parsed.get("hp")) or 10
+    hp = coerce_int(parsed.get("hp")) or 0
     ac = coerce_int(parsed.get("ac")) or 0
     speed = coerce_int(parsed.get("speed")) or 30
     # Default level to a plausible random range if neither the model nor user provided one
@@ -689,51 +689,93 @@ def generate_character(req: GenerateRequest):
         return (score - 10) // 2
 
     pb = 2 + (level - 1) // 4
+    con_mod = mod(stats_norm["CON"])
+    dex_mod = mod(stats_norm["DEX"])
+
+    # Hit dice by class (PHB)
+    class_hit_die = {
+        "barbarian": 12,
+        "fighter": 10,
+        "paladin": 10,
+        "ranger": 10,
+        "bard": 8,
+        "cleric": 8,
+        "druid": 8,
+        "monk": 8,
+        "rogue": 8,
+        "warlock": 8,
+        "artificer": 8,
+        "sorcerer": 6,
+        "wizard": 6,
+    }
+    hit_die = class_hit_die.get(class_key, 8)
+    avg_hit_die = (hit_die // 2) + 1
+    hp_calc = max(level, (hit_die + con_mod) + (level - 1) * (avg_hit_die + con_mod))
+    if entity_type in {"character", "npc"}:
+        hp = hp_calc
+    elif hp <= 0:
+        hp = hp_calc
 
     # AC calculation (simple)
     def calc_ac():
         shield_bonus = 2 if any("shield" in item.lower() for item in equipment) else 0
         armor = [e.lower() for e in equipment if any(x in e.lower() for x in ["armor", "mail", "plate", "leather", "breastplate", "chain shirt", "scale", "hide", "ring mail"])]
-        dex_mod = mod(stats_norm["DEX"])
         # defaults
         base = 10 + dex_mod
+        source = "Unarmored"
         # monk/barbarian unarmored
-        cls = (parsed.get("class") or "").lower()
+        cls = cls_lower
         if not armor:
             if "monk" in cls:
                 base = 10 + dex_mod + mod(stats_norm["WIS"])
+                source = "Unarmored Defense (Monk)"
             elif "barbarian" in cls:
                 base = 10 + dex_mod + mod(stats_norm["CON"])
+                source = "Unarmored Defense (Barbarian)"
         # armor types
         for a in armor:
             if "studded" in a:
                 base = 12 + dex_mod
+                source = "Studded Leather"
             elif "leather" in a:
                 base = 11 + dex_mod
+                source = "Leather"
             elif "padded" in a:
                 base = 11 + dex_mod
+                source = "Padded"
             elif "hide" in a:
                 base = 12 + min(dex_mod, 2)
+                source = "Hide"
             elif "chain shirt" in a:
                 base = 13 + min(dex_mod, 2)
+                source = "Chain Shirt"
             elif "scale" in a:
                 base = 14 + min(dex_mod, 2)
+                source = "Scale Mail"
             elif "breastplate" in a:
                 base = 14 + min(dex_mod, 2)
+                source = "Breastplate"
             elif "half plate" in a:
                 base = 15 + min(dex_mod, 2)
+                source = "Half Plate"
             elif "ring mail" in a:
                 base = 14
+                source = "Ring Mail"
             elif "chain mail" in a:
                 base = 16
+                source = "Chain Mail"
             elif "splint" in a:
                 base = 17
+                source = "Splint"
             elif "plate" in a:
                 base = 18
-        return base + shield_bonus
-
-    if ac == 0:
-        ac = calc_ac()
+                source = "Plate"
+        return base + shield_bonus, source, shield_bonus
+    ac_calc, ac_source, shield_bonus = calc_ac()
+    if entity_type in {"character", "npc"}:
+        ac = ac_calc
+    elif ac == 0:
+        ac = ac_calc
 
     # Skills and saves
     skill_names = {
@@ -846,6 +888,37 @@ def generate_character(req: GenerateRequest):
         spell_save_dc = 8 + pb + spell_mod
         spell_attack_bonus = pb + spell_mod
 
+    calc_breakdown = {
+        "proficiency_bonus": {
+            "formula": f"2 + floor((level-1)/4) = {pb}",
+            "level": level,
+            "result": pb,
+        },
+        "hp": {
+            "formula": f"{hit_die}+{con_mod} + (level-1)*({avg_hit_die}+{con_mod})",
+            "hit_die": hit_die,
+            "con_mod": con_mod,
+            "level": level,
+            "result": hp,
+        },
+        "ac": {
+            "formula": f"{ac_source} base + DEX({dex_mod}) + Shield({shield_bonus})",
+            "armor": ac_source,
+            "dex_mod": dex_mod,
+            "shield_bonus": shield_bonus,
+            "result": ac,
+        },
+    }
+    if spell_ability:
+        spell_mod = mod(stats_norm[spell_ability])
+        calc_breakdown["spellcasting"] = {
+            "ability": spell_ability,
+            "ability_mod": spell_mod,
+            "spell_save_dc": spell_save_dc,
+            "spell_attack_bonus": spell_attack_bonus,
+            "formula": f"DC 8 + PB({pb}) + {spell_ability}({spell_mod}); attack PB({pb}) + {spell_ability}({spell_mod})",
+        }
+
     # Apply saving throw profs from JSON if provided
     if saving_throw_profs:
         save_profs = {s.upper() for s in saving_throw_profs}
@@ -893,6 +966,7 @@ def generate_character(req: GenerateRequest):
         "spell_attack_bonus": spell_attack_bonus,
         "attacks": attacks,
         "spells": spells,
+        "calc_breakdown": calc_breakdown,
     }
 
     return {
@@ -900,6 +974,7 @@ def generate_character(req: GenerateRequest):
         "answer": raw,
         "parsed": sheet_json,  # normalized values for UI
         "sheet_json": sheet_json,
+        "calc_breakdown": calc_breakdown,
     }
 
 
