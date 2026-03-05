@@ -480,15 +480,13 @@ export default function HomePage() {
                       checked={rollMode === "manual"}
                       onChange={() => setRollMode("manual")}
                     />
-                    I will type rolls
+                    Manual Input
                   </label>
                 </div>
 
                 {rollMode === "standard_array" && (
                   <div className="mt-3 space-y-3">
-                    <p className="text-xs text-slate-400">
-                      Assign each value once. Empty fields won’t submit.
-                    </p>
+                    <p className="text-xs text-slate-400">Assign each value once.</p>
                     <div className="grid grid-cols-3 gap-2 text-sm">
                       {abilityKeys.map((key) => {
                         const used = new Set(
