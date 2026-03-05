@@ -88,7 +88,7 @@ def health():
 
 class GenerateRequest(BaseModel):
     entity_type: str = "character"          # "character" | "enemy" | "npc"
-    roll_mode: str                           # "auto" | "standard_array" | "manual"
+    roll_mode: str                           # "auto" | "standard_array" | "manual" | "point_buy"
     manual_rolls: Optional[List[int]] = None
     ability_assignment: Optional[Dict[str, int]] = None  # {"STR": 15, ...}
     race: Optional[str] = None
@@ -149,6 +149,8 @@ def build_question(req: GenerateRequest) -> str:
     # Add ability guidance for the model
     if req.roll_mode == "standard_array":
         question += " Use the standard array (15, 14, 13, 12, 10, 8) for abilities; assign logically."
+    elif req.roll_mode == "point_buy":
+        question += " Use the 27-point buy system (8-15 before bonuses) for abilities."
     elif req.roll_mode == "manual" and req.manual_rolls:
         question += f" Use these rolled scores {req.manual_rolls} for abilities."
         if req.ability_assignment:
@@ -334,6 +336,49 @@ import re
         if val is None:
             val = 10  # default to average if missing
         stats_norm[k] = val
+
+    def normalize_assignment(assign: dict) -> dict[str, int]:
+        normalized = {}
+        for key, val in assign.items():
+            k = str(key).upper()
+            if k in {"STR", "DEX", "CON", "INT", "WIS", "CHA"}:
+                v = coerce_int(val)
+                if v is not None:
+                    normalized[k] = v
+        return normalized
+
+    def is_standard_array(assign: dict[str, int]) -> bool:
+        target = sorted([15, 14, 13, 12, 10, 8])
+        return sorted(assign.values()) == target
+
+    def is_point_buy(assign: dict[str, int]) -> bool:
+        costs = {8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9}
+        if any(v not in costs for v in assign.values()):
+            return False
+        return sum(costs[v] for v in assign.values()) <= 27
+
+    if req.ability_assignment and req.roll_mode in {"manual", "standard_array", "point_buy"}:
+        normalized = normalize_assignment(req.ability_assignment)
+        if set(normalized.keys()) != {"STR", "DEX", "CON", "INT", "WIS", "CHA"}:
+            raise HTTPException(status_code=400, detail="Ability assignment must include STR, DEX, CON, INT, WIS, CHA.")
+        if req.roll_mode == "standard_array" and not is_standard_array(normalized):
+            raise HTTPException(status_code=400, detail="Standard array assignment must use 15,14,13,12,10,8 exactly once.")
+        if req.roll_mode == "point_buy" and not is_point_buy(normalized):
+            raise HTTPException(status_code=400, detail="Point buy assignment must be 8-15 with total cost <= 27.")
+        if req.roll_mode == "manual" and req.manual_rolls:
+            pool = [coerce_int(v) for v in req.manual_rolls or []]
+            pool = [v for v in pool if v is not None]
+            remaining = pool[:]
+            ok = True
+            for v in normalized.values():
+                if v in remaining:
+                    remaining.remove(v)
+                else:
+                    ok = False
+                    break
+            if not ok:
+                raise HTTPException(status_code=400, detail="Manual assignment must use the provided rolls.")
+        stats_norm.update(normalized)
 
     cls_lower = (parsed.get("class") or "").lower()
     # Enforce multiclass ability minimums (PHB)

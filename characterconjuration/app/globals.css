@@ -40,56 +40,78 @@ body {
   backdrop-filter: blur(4px);
 }
 
-.potion-wrap {
-  width: 140px;
-  height: 180px;
-  position: relative;
+.potion-loader {
+  width: 180px;
+  height: 200px;
   margin: 0 auto;
-  animation: potion-spin 6s ease-in-out infinite;
+  position: relative;
+  animation: potion-float 4.6s ease-in-out infinite;
 }
 
-.potion-bottle {
+.potion-glass {
   position: absolute;
-  inset: 0;
+  inset: 18px 22px 12px 22px;
   border: 4px solid #f5d76e;
-  border-radius: 24px 24px 28px 28px;
-  box-shadow: 0 0 0 4px #14141f, inset 0 0 20px rgba(245, 215, 110, 0.2);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 60%);
+  border-radius: 26px 26px 36px 36px;
+  box-shadow: 0 0 0 5px #0d0d17, inset 0 0 30px rgba(245, 215, 110, 0.15);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 60%);
+  overflow: hidden;
 }
 
 .potion-neck {
   position: absolute;
-  top: -18px;
-  left: 40px;
-  right: 40px;
-  height: 24px;
+  top: -6px;
+  left: 46px;
+  right: 46px;
+  height: 28px;
   border: 4px solid #f5d76e;
   border-bottom: none;
   border-radius: 14px 14px 0 0;
-  background: #1b1b2e;
+  background: #161624;
+}
+
+.potion-cap {
+  position: absolute;
+  top: -20px;
+  left: 58px;
+  right: 58px;
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #7a5b22, #f5d76e, #7a5b22);
+  box-shadow: 0 4px 0 #0b0b13;
 }
 
 .potion-liquid {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  height: 68%;
-  border-radius: 18px 18px 22px 22px;
-  background: radial-gradient(circle at 30% 30%, #7ef6c6 0, #2fbf8a 45%, #128061 100%);
-  animation: potion-slosh 3.4s ease-in-out infinite;
-  transform-origin: 50% 90%;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 70%;
+  background: radial-gradient(circle at 30% 20%, #8bfbd8 0, #27c596 55%, #11765a 100%);
+  animation: potion-fill 3.6s ease-in-out infinite;
 }
 
-.potion-glint {
+.potion-wave {
   position: absolute;
-  top: 18px;
-  left: 16px;
+  top: -18px;
+  left: -20%;
+  width: 140%;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  filter: blur(0.5px);
+  animation: potion-slosh 3.2s ease-in-out infinite;
+}
+
+.potion-shine {
+  position: absolute;
+  top: 24px;
+  left: 18px;
   width: 18px;
-  height: 46px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
-  opacity: 0.7;
+  height: 70px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+  opacity: 0.75;
 }
 
 .potion-bubble {
@@ -98,25 +120,25 @@ body {
   height: 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.5);
-  animation: bubble-rise 3s ease-in-out infinite;
+  animation: bubble-rise 2.8s ease-in-out infinite;
 }
 
 .potion-bubble.b1 {
-  left: 35%;
-  bottom: 30%;
+  left: 30%;
+  bottom: 22%;
   animation-delay: 0s;
 }
 
 .potion-bubble.b2 {
-  left: 55%;
-  bottom: 25%;
-  animation-delay: 0.8s;
+  left: 58%;
+  bottom: 18%;
+  animation-delay: 0.7s;
 }
 
 .potion-bubble.b3 {
   left: 45%;
-  bottom: 15%;
-  animation-delay: 1.6s;
+  bottom: 30%;
+  animation-delay: 1.4s;
 }
 
 .loading-ellipsis {
@@ -125,23 +147,33 @@ body {
   text-align: left;
 }
 
-@keyframes potion-spin {
+@keyframes potion-float {
   0%,
   100% {
-    transform: rotate(-2deg);
+    transform: translateY(0);
   }
   50% {
-    transform: rotate(3deg);
+    transform: translateY(-6px);
   }
 }
 
 @keyframes potion-slosh {
   0%,
   100% {
-    transform: rotate(-2deg) translateY(0);
+    transform: translateX(-6%) rotate(-2deg);
   }
   50% {
-    transform: rotate(3deg) translateY(-2px);
+    transform: translateX(6%) rotate(2deg);
+  }
+}
+
+@keyframes potion-fill {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
   }
 }
 

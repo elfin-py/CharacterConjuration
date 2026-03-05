@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type RollMode = "auto" | "standard_array" | "manual";
+type RollMode = "auto" | "standard_array" | "manual" | "point_buy";
 type BuilderType = "character" | "enemy" | "npc";
 
 interface GenerateResponse {
@@ -14,6 +14,7 @@ interface GenerateResponse {
 }
 
 const abilityKeys = ["STR", "DEX", "CON", "INT", "WIS", "CHA"] as const;
+const standardArray = [15, 14, 13, 12, 10, 8];
 const raceOptions = [
   "",
   "Dragonborn",
@@ -98,13 +99,29 @@ export default function HomePage() {
   // Character-only ability inputs
   const [rollMode, setRollMode] = useState<RollMode>("auto");
   const [manualRolls, setManualRolls] = useState<string[]>(["", "", "", "", "", ""]);
-  const [abilities, setAbilities] = useState<Record<string, string>>({
+  const [manualAssignments, setManualAssignments] = useState<Record<string, string>>({
     STR: "",
     DEX: "",
     CON: "",
     INT: "",
     WIS: "",
     CHA: "",
+  });
+  const [standardAssignments, setStandardAssignments] = useState<Record<string, string>>({
+    STR: "",
+    DEX: "",
+    CON: "",
+    INT: "",
+    WIS: "",
+    CHA: "",
+  });
+  const [pointBuyScores, setPointBuyScores] = useState<Record<string, number>>({
+    STR: 8,
+    DEX: 8,
+    CON: 8,
+    INT: 8,
+    WIS: 8,
+    CHA: 8,
   });
 
   const [race, setRace] = useState("");
@@ -175,8 +192,34 @@ export default function HomePage() {
     setManualRolls(next);
   };
 
-  const handleAbilityAssignChange = (key: string, value: string) => {
-    setAbilities((prev) => ({ ...prev, [key]: value }));
+  const handleManualAssignChange = (key: string, value: string) => {
+    setManualAssignments((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleStandardAssignChange = (key: string, value: string) => {
+    setStandardAssignments((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const pointBuyCost = (score: number) => {
+    if (score <= 13) return score - 8;
+    if (score === 14) return 7;
+    if (score === 15) return 9;
+    return 0;
+  };
+
+  const totalPointBuyCost = Object.values(pointBuyScores).reduce((acc, score) => acc + pointBuyCost(score), 0);
+  const pointsRemaining = 27 - totalPointBuyCost;
+
+  const adjustPointBuy = (key: string, delta: number) => {
+    setPointBuyScores((prev) => {
+      const current = prev[key];
+      const nextScore = Math.min(15, Math.max(8, current + delta));
+      if (nextScore === current) return prev;
+      const currentTotal = Object.values(prev).reduce((acc, score) => acc + pointBuyCost(score), 0);
+      const nextTotal = currentTotal - pointBuyCost(current) + pointBuyCost(nextScore);
+      if (nextTotal > 27) return prev;
+      return { ...prev, [key]: nextScore };
+    });
   };
 
   const buildConcept = () => {
@@ -208,6 +251,18 @@ export default function HomePage() {
       setError("Backend unavailable. Please wait a moment and try again.");
       return;
     }
+    if (builderType === "character" && rollMode === "standard_array") {
+      const values = Object.values(standardAssignments).filter((v) => v !== "");
+      const unique = new Set(values);
+      const isValid =
+        values.length === 6 &&
+        unique.size === 6 &&
+        values.every((v) => standardArray.includes(Number(v)));
+      if (!isValid) {
+        setError("Assign each standard array value (15, 14, 13, 12, 10, 8) exactly once.");
+        return;
+      }
+    }
     setLoading(true);
     setError(null);
     setResult(null);
@@ -233,7 +288,7 @@ export default function HomePage() {
           .map((v) => Number(v));
 
         body.ability_assignment = Object.fromEntries(
-          Object.entries(abilities)
+          Object.entries(manualAssignments)
             .filter(([, v]) => v.trim() !== "")
             .map(([k, v]) => [k, Number(v)]),
         );
@@ -241,7 +296,14 @@ export default function HomePage() {
 
       if (effectiveRollMode === "standard_array") {
         body.manual_rolls = null;
-        body.ability_assignment = null;
+        body.ability_assignment = Object.fromEntries(
+          Object.entries(standardAssignments).map(([k, v]) => [k, Number(v)]),
+        );
+      }
+
+      if (effectiveRollMode === "point_buy") {
+        body.manual_rolls = null;
+        body.ability_assignment = { ...pointBuyScores };
       }
     }
 
@@ -279,15 +341,19 @@ export default function HomePage() {
     <main className="min-h-screen text-slate-50">
       {loading && (
         <div className="fixed inset-0 z-50 grid place-items-center loading-overlay">
-          <div className="w-[320px] rounded-2xl border border-[#35355a] bg-[#0e0e17]/80 p-6 text-center pixel-border">
-            <div className="potion-wrap">
+          <div className="w-[340px] rounded-2xl border border-[#35355a] bg-[#0e0e17]/80 p-6 text-center pixel-border">
+            <div className="potion-loader">
+              <div className="potion-cap" />
               <div className="potion-neck" />
-              <div className="potion-bottle" />
-              <div className="potion-liquid" />
-              <div className="potion-glint" />
-              <span className="potion-bubble b1" />
-              <span className="potion-bubble b2" />
-              <span className="potion-bubble b3" />
+              <div className="potion-glass">
+                <div className="potion-liquid">
+                  <div className="potion-wave" />
+                  <span className="potion-bubble b1" />
+                  <span className="potion-bubble b2" />
+                  <span className="potion-bubble b3" />
+                </div>
+                <div className="potion-shine" />
+              </div>
             </div>
             <p className="mt-4 text-sm uppercase tracking-[0.2em] text-amber-200">
               Conjuring
@@ -412,6 +478,15 @@ export default function HomePage() {
                   <label className="flex items-center gap-2">
                     <input
                       type="radio"
+                      value="point_buy"
+                      checked={rollMode === "point_buy"}
+                      onChange={() => setRollMode("point_buy")}
+                    />
+                    Point buy (27 points)
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
                       value="manual"
                       checked={rollMode === "manual"}
                       onChange={() => setRollMode("manual")}
@@ -419,6 +494,76 @@ export default function HomePage() {
                     I will type rolls
                   </label>
                 </div>
+
+                {rollMode === "standard_array" && (
+                  <div className="mt-3 space-y-3">
+                    <p className="text-xs text-slate-400">
+                      Assign each value once. Empty fields won’t submit.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      {abilityKeys.map((key) => {
+                        const used = new Set(
+                          Object.entries(standardAssignments)
+                            .filter(([k]) => k !== key)
+                            .map(([, v]) => v)
+                            .filter((v) => v !== ""),
+                        );
+                        return (
+                          <label key={key} className="flex flex-col gap-1">
+                            <span>{key}</span>
+                            <select
+                              className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                              value={standardAssignments[key]}
+                              onChange={(e) => handleStandardAssignChange(key, e.target.value)}
+                            >
+                              <option value="">Select</option>
+                              {standardArray.map((value) => (
+                                <option key={value} value={value} disabled={used.has(String(value))}>
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {rollMode === "point_buy" && (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span>Spend 27 points (8–15 each)</span>
+                      <span className={pointsRemaining < 0 ? "text-red-300" : "text-emerald-300"}>
+                        {pointsRemaining} points remaining
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {abilityKeys.map((key) => (
+                        <div key={key} className="flex items-center justify-between rounded border border-slate-700 bg-slate-950 px-2 py-1">
+                          <span>{key}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="h-7 w-7 rounded border border-slate-600 text-slate-200 hover:border-amber-300"
+                              onClick={() => adjustPointBuy(key, -1)}
+                            >
+                              -
+                            </button>
+                            <span className="w-6 text-center">{pointBuyScores[key]}</span>
+                            <button
+                              type="button"
+                              className="h-7 w-7 rounded border border-slate-600 text-slate-200 hover:border-amber-300"
+                              onClick={() => adjustPointBuy(key, 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {rollMode === "manual" && (
                   <div className="mt-3 space-y-3">
@@ -441,8 +586,8 @@ export default function HomePage() {
                           <input
                             type="number"
                             className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
-                            value={abilities[key]}
-                            onChange={(e) => handleAbilityAssignChange(key, e.target.value)}
+                            value={manualAssignments[key]}
+                            onChange={(e) => handleManualAssignChange(key, e.target.value)}
                             placeholder="score"
                           />
                         </label>
