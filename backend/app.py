@@ -286,6 +286,7 @@ def generate_character(req: GenerateRequest):
                 "- Use a SINGLE class unless the user explicitly requests multiclass; otherwise choose one class/subclass that fits and matches the given race/background/alignment and concept (avoid defaulting to wizard or repeating the example). Never leave example placeholders in the final JSON.\n"
                 "- If level allows feats or ASIs and choices are implied or necessary, add them to the features array (include the feat names or note \"ASI\" with the adjusted scores).\n"
                 "- Prefer backgrounds, languages, spells, and gear found in the provided context/books.\n"
+                "- Spells must be appropriate for class, race, and level. Do not exceed the maximum spell level for the class at the given level. Include a sensible number of cantrips and known/prepared spells for that class.\n"
                 "- If entity_type is NPC, still fill the schema with NPC-appropriate class/background. If enemy, use class='enemy' and subclass as creature type and fill stats similarly.\n"
                 "Respond with JSON only, no commentary."
             ),
@@ -536,6 +537,61 @@ def generate_character(req: GenerateRequest):
             has_spells = isinstance(spells_obj, dict) and any(isinstance(v, list) and len(v) > 0 for v in spells_obj.values())
             if not has_spells:
                 issues.append("spells")
+            else:
+                # Max spell level by class progression (simplified PHB)
+                if "warlock" in class_name:
+                    max_spell_level = 1 if level_val <= 2 else 2 if level_val <= 4 else 3 if level_val <= 6 else 4 if level_val <= 8 else 5
+                elif any(c in class_name for c in ["paladin", "ranger", "artificer"]):
+                    if level_val < 2:
+                        max_spell_level = 0
+                    elif level_val <= 4:
+                        max_spell_level = 1
+                    elif level_val <= 8:
+                        max_spell_level = 2
+                    elif level_val <= 12:
+                        max_spell_level = 3
+                    elif level_val <= 16:
+                        max_spell_level = 4
+                    else:
+                        max_spell_level = 5
+                else:
+                    # full casters
+                    if level_val <= 2:
+                        max_spell_level = 1
+                    elif level_val <= 4:
+                        max_spell_level = 2
+                    elif level_val <= 6:
+                        max_spell_level = 3
+                    elif level_val <= 8:
+                        max_spell_level = 4
+                    elif level_val <= 10:
+                        max_spell_level = 5
+                    elif level_val <= 12:
+                        max_spell_level = 6
+                    elif level_val <= 14:
+                        max_spell_level = 7
+                    elif level_val <= 16:
+                        max_spell_level = 8
+                    else:
+                        max_spell_level = 9
+
+                # Validate spell levels do not exceed max
+                for key, value in spells_obj.items():
+                    if key == "cantrip":
+                        continue
+                    try:
+                        lvl = int(str(key).strip())
+                    except Exception:
+                        continue
+                    if lvl > max_spell_level:
+                        issues.append("spells_level")
+                        break
+
+                # Require at least one cantrip for full casters and warlocks
+                if any(c in class_name for c in ["bard", "cleric", "druid", "sorcerer", "warlock", "wizard"]):
+                    cantrips = spells_obj.get("cantrip")
+                    if not (isinstance(cantrips, list) and len(cantrips) > 0):
+                        issues.append("cantrips")
 
         return issues
 
