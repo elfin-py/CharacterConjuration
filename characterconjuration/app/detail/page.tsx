@@ -14,6 +14,7 @@ type DetailData = {
 
 export default function DetailPage() {
   const [data, setData] = useState<DetailData | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
 
   useEffect(() => {
     const stored = typeof window !== "undefined" ? window.localStorage.getItem("cc-latest-result") : null;
@@ -26,16 +27,41 @@ export default function DetailPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem("cc-theme") : null;
+    if (stored === "light" || stored === "dark") {
+      setTheme(stored);
+      document.documentElement.setAttribute("data-theme", stored);
+    } else {
+      const prefersDark =
+        typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const initial = prefersDark ? "dark" : "light";
+      setTheme(initial);
+      document.documentElement.setAttribute("data-theme", initial);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("cc-theme", next);
+    }
+    document.documentElement.setAttribute("data-theme", next);
+  };
+
   const entityType = (data?.entity_type || "").toLowerCase();
   const isEnemy = entityType === "enemy";
   const isNpc = entityType === "npc";
 
   if (!data) {
     return (
-      <main className="min-h-screen bg-[#0b0b13] text-slate-50 flex items-center justify-center">
-        <div className="rounded-xl border border-[#35355a] bg-[#11111b]/80 px-6 py-5 space-y-3">
-          <p className="text-sm">No conjuration found. Generate one first.</p>
-          <Link href="/" className="underline text-amber-300">
+      <main className="min-h-screen text-[color:var(--text)] flex items-center justify-center">
+        <div className="rounded-2xl cc-card cc-vignette px-6 py-5 space-y-3">
+          <p className="text-sm cc-ink">No conjuration found. Generate one first.</p>
+          <Link href="/" className="underline text-[color:var(--accent)]">
             Back to builder
           </Link>
         </div>
@@ -50,17 +76,46 @@ export default function DetailPage() {
   const speed = parsed.speed ?? "—";
 
   return (
-    <main className="min-h-screen bg-[#0b0b13] text-slate-50">
+    <main className="min-h-screen text-[color:var(--text)]">
+      <header className="sticky top-0 z-20 cc-header cc-paper backdrop-blur px-6 py-4 w-full">
+        <div className="flex items-center justify-between max-w-6xl mx-auto">
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo-text.png"
+              alt="Character Conjuration"
+              className="h-10 w-auto max-w-[240px] object-contain"
+            />
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-1.5 hover:bg-[color:var(--surface)] transition"
+              aria-label="Toggle theme"
+            >
+              <i className={`fa ${theme === "dark" ? "fa-moon-o" : "fa-sun-o"}`} aria-hidden="true" />
+            </button>
+            <button className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-1.5 hover:bg-[color:var(--surface)] transition">
+              Sign in
+            </button>
+            <button className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-1.5 hover:bg-[color:var(--surface)] transition">
+              Log in
+            </button>
+          </div>
+        </div>
+      </header>
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Your conjuration</p>
-            <h1 className="text-3xl font-semibold capitalize">{data.entity_type || "character"}</h1>
+            <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--accent)]">Your conjuration</p>
+            <h1 className="text-3xl font-semibold capitalize cc-title">
+              {data.entity_type || "character"}
+            </h1>
           </div>
           <div className="flex gap-2 text-sm">
             {isEnemy ? (
               <button
-                className="pixel-btn rounded-lg bg-amber-300 text-[#111] px-3 py-2 font-semibold hover:bg-amber-200 transition"
+                className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 font-semibold hover:bg-[color:var(--surface)] transition"
                 disabled={!data.sheet_json}
                 onClick={async () => {
                   if (!data.sheet_json) return;
@@ -91,7 +146,7 @@ export default function DetailPage() {
               </button>
             ) : isNpc ? null : (
               <button
-                className="pixel-btn rounded-lg bg-amber-300 text-[#111] px-3 py-2 font-semibold hover:bg-amber-200 transition"
+                className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 font-semibold hover:bg-[color:var(--surface)] transition"
                 disabled={!data.sheet_json}
                 onClick={async () => {
                   if (!data.sheet_json) return;
@@ -123,18 +178,18 @@ export default function DetailPage() {
             )}
             <Link
               href="/"
-              className="pixel-btn rounded-lg bg-[#1c1c2f] border border-[#35355a] px-3 py-2 hover:bg-[#25253a] transition"
+              className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 hover:bg-[color:var(--surface)] transition"
             >
               Back
             </Link>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#35355a] bg-[#11111b]/80 p-4 space-y-3 text-sm pixel-border">
+        <div className="rounded-2xl cc-card cc-vignette p-4 space-y-3 text-sm">
           {isEnemy && data.stat_block && (
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Stat block</p>
-              <pre className="whitespace-pre-wrap text-xs bg-[#0c0c14] border border-[#35355a] p-3 rounded">
+              <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text)]/60">Stat block</p>
+              <pre className="whitespace-pre-wrap text-xs cc-card cc-paper p-3 rounded">
                 {data.stat_block}
               </pre>
             </div>
@@ -142,16 +197,16 @@ export default function DetailPage() {
 
           {parsed?.notes || parsed?.short_blurb ? (
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Flavour</p>
-              <p className="text-slate-200">{parsed.notes || parsed.short_blurb}</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text)]/60">Flavour</p>
+              <p className="cc-ink">{parsed.notes || parsed.short_blurb}</p>
             </div>
           ) : null}
 
           {parsed && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Basics</p>
-                <ul className="space-y-1 text-slate-200">
+                <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text)]/60">Basics</p>
+                <ul className="space-y-1 cc-ink">
                   <li><strong>Name:</strong> {parsed.name || "—"}</li>
                   <li><strong>Size:</strong> {parsed.size || "—"}</li>
                   <li><strong>Race:</strong> {parsed.race || "—"}</li>
@@ -166,12 +221,14 @@ export default function DetailPage() {
               </div>
               {!isNpc && (
                 <div className="space-y-1">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Abilities</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text)]/60">Abilities</p>
                   <div className="grid grid-cols-3 gap-2">
                     {["STR", "DEX", "CON", "INT", "WIS", "CHA"].map((k) => (
-                      <div key={k} className="rounded border border-[#35355a] bg-[#0c0c14]/60 px-2 py-1 text-center">
-                        <p className="text-xs text-slate-400">{k}</p>
-                        <p className="text-base font-semibold">{stats?.[k] ?? stats?.[k.toLowerCase()] ?? "—"}</p>
+                      <div key={k} className="rounded cc-card cc-paper px-2 py-1 text-center">
+                        <p className="text-xs text-[color:var(--text)]/60">{k}</p>
+                        <p className="text-base font-semibold cc-ink">
+                          {stats?.[k] ?? stats?.[k.toLowerCase()] ?? "—"}
+                        </p>
                       </div>
                     ))}
                   </div>

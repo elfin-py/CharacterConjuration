@@ -94,11 +94,13 @@ const loadingPhrases = [
 
 export default function HomePage() {
   const router = useRouter();
+  const displayEntityType = (value: BuilderType) => (value === "npc" ? "NPC" : value);
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   // Primary builder selection
   const [builderType, setBuilderType] = useState<BuilderType>("character");
   // Character-only ability inputs
   const [rollMode, setRollMode] = useState<RollMode>("auto");
-  const [manualAssignments, setManualAssignments] = useState<Record<string, string>>({
+  const [abilities, setAbilities] = useState<Record<string, string>>({
     STR: "",
     DEX: "",
     CON: "",
@@ -165,6 +167,29 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem("cc-theme") : null;
+    if (stored === "light" || stored === "dark") {
+      setTheme(stored);
+      document.documentElement.setAttribute("data-theme", stored);
+    } else {
+      const prefersDark =
+        typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const initial = prefersDark ? "dark" : "light";
+      setTheme(initial);
+      document.documentElement.setAttribute("data-theme", initial);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("cc-theme", next);
+    }
+    document.documentElement.setAttribute("data-theme", next);
+  };
+
+  useEffect(() => {
     if (!loading) {
       setLoadingDots("");
       setLoadingPhraseIndex(0);
@@ -185,8 +210,8 @@ export default function HomePage() {
     };
   }, [loading]);
 
-  const handleManualAssignChange = (key: string, value: string) => {
-    setManualAssignments((prev) => ({ ...prev, [key]: value }));
+  const handleAbilityAssignChange = (key: string, value: string) => {
+    setAbilities((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleStandardAssignChange = (key: string, value: string) => {
@@ -244,18 +269,6 @@ export default function HomePage() {
       setError("Backend unavailable. Please wait a moment and try again.");
       return;
     }
-    if (builderType === "character" && rollMode === "standard_array") {
-      const values = Object.values(standardAssignments).filter((v) => v !== "");
-      const unique = new Set(values);
-      const isValid =
-        values.length === 6 &&
-        unique.size === 6 &&
-        values.every((v) => standardArray.includes(Number(v)));
-      if (!isValid) {
-        setError("Assign each standard array value (15, 14, 13, 12, 10, 8) exactly once.");
-        return;
-      }
-    }
     setLoading(true);
     setError(null);
     setResult(null);
@@ -274,10 +287,21 @@ export default function HomePage() {
     };
 
     if (builderType === "character") {
+      if (effectiveRollMode === "standard_array") {
+        const values = Object.values(standardAssignments).filter((v) => v !== "");
+        const unique = new Set(values);
+        const isValid =
+          values.length === 6 &&
+          unique.size === 6 &&
+          values.every((v) => standardArray.includes(Number(v)));
+        if (!isValid) {
+          setError("Assign each standard array value (15, 14, 13, 12, 10, 8) exactly once.");
+          return;
+        }
+      }
       if (effectiveRollMode === "manual") {
-        body.manual_rolls = null;
         body.ability_assignment = Object.fromEntries(
-          Object.entries(manualAssignments)
+          Object.entries(abilities)
             .filter(([, v]) => v.trim() !== "")
             .map(([k, v]) => [k, Number(v)]),
         );
@@ -327,22 +351,18 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen text-slate-50">
+    <main className="min-h-screen text-[color:var(--text)]">
       {loading && (
         <div className="fixed inset-0 z-50 grid place-items-center loading-overlay">
-          <div className="w-[340px] rounded-2xl border border-[#35355a] bg-[#0e0e17]/80 p-6 text-center pixel-border">
-            <div className="potion-loader">
-              <div className="potion-cap" />
+          <div className="w-[320px] rounded-2xl border border-[#35355a] bg-[#0e0e17]/80 p-6 text-center pixel-border">
+            <div className="potion-wrap">
               <div className="potion-neck" />
-              <div className="potion-glass">
-                <div className="potion-liquid">
-                  <div className="potion-wave" />
-                  <span className="potion-bubble b1" />
-                  <span className="potion-bubble b2" />
-                  <span className="potion-bubble b3" />
-                </div>
-                <div className="potion-shine" />
-              </div>
+              <div className="potion-bottle" />
+              <div className="potion-liquid" />
+              <div className="potion-glint" />
+              <span className="potion-bubble b1" />
+              <span className="potion-bubble b2" />
+              <span className="potion-bubble b3" />
             </div>
             <p className="mt-4 text-sm uppercase tracking-[0.2em] text-amber-200">
               Conjuring
@@ -354,45 +374,46 @@ export default function HomePage() {
           </div>
         </div>
       )}
-      <div className="max-w-6xl mx-auto px-6 pb-12">
-        <header className="sticky top-0 z-10 -mx-6 mb-6 bg-[#0b0b13]/85 backdrop-blur border-b border-[#242437] px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-lg bg-[#1b1b2e] border border-[#35355a] grid place-items-center text-amber-300 font-semibold pixel-border">
-                CC
-              </div>
-              <div>
-                <p className="text-lg font-semibold tracking-tight">Character Conjuration</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <button className="pixel-btn rounded-lg bg-[#1c1c2f] border border-[#35355a] px-3 py-1.5 hover:bg-[#25253a] transition">
-                Sign in
-              </button>
-              <button className="pixel-btn rounded-lg bg-amber-300 text-[#111] px-3 py-1.5 font-semibold hover:bg-amber-200 transition">
-                Log in
-              </button>
-            </div>
+      <header className="sticky top-0 z-20 cc-header cc-paper backdrop-blur px-6 py-4 w-full">
+        <div className="flex items-center justify-between max-w-6xl mx-auto">
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo-text.png"
+              alt="Character Conjuration"
+              className="h-10 w-auto max-w-[240px] object-contain"
+            />
           </div>
-        </header>
+          <div className="flex items-center gap-2 text-sm">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-1.5 hover:bg-[color:var(--surface)] transition"
+              aria-label="Toggle theme"
+            >
+              <i className={`fa ${theme === "dark" ? "fa-moon-o" : "fa-sun-o"}`} aria-hidden="true" />
+            </button>
+            <button className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-1.5 hover:bg-[color:var(--surface)] transition">
+              Sign in
+            </button>
+            <button className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-1.5 hover:bg-[color:var(--surface)] transition">
+              Log in
+            </button>
+          </div>
+        </div>
+      </header>
 
-        <section className="mb-10 space-y-4">
-          <p className="text-xs uppercase tracking-[0.3em] text-amber-300">Adventurer's workbench</p>
+      <div className="max-w-6xl mx-auto px-6 pb-12 min-h-[calc(100vh-120px)]">
+        <section className="mt-8 mb-10 space-y-4 rounded-2xl cc-card cc-vignette p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="space-y-3">
-              <h1 className="text-4xl md:text-5xl font-semibold leading-tight">
-                Build characters, enemies, and NPCs in a retro tavern UI.
+              <h1 className="text-4xl md:text-5xl font-semibold leading-tight cc-title cc-ink">
+                Build characters, enemies, and NPCs at the flick of a wrist.
               </h1>
-              <p className="max-w-2xl text-slate-300">
-                Plug in your ideas, we keep to 5e rules and shape them into ready-to-run sheets. Save when signed in or draft on the fly.
+              <p className="max-w-2xl cc-paragraph cc-ink text-sm">
+                Choose Character, Enemy, or NPC, add any details you want, then hit Generate. The tool creates a rules‑aware profile for your campaign.
               </p>
-              <div className="flex flex-wrap gap-3 text-xs text-slate-300">
-                <span className="rounded-full border border-amber-500/60 bg-amber-500/10 px-3 py-1">5e grounded</span>
-                <span className="rounded-full border border-[#35355a] px-3 py-1">Quick drafts</span>
-                <span className="rounded-full border border-[#35355a] px-3 py-1">Optional login to save</span>
-              </div>
             </div>
-            <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 shadow-lg shadow-amber-900/30">
+            <div className="rounded-2xl cc-card-muted px-4 py-3 text-sm cc-ink">
               Sign in to save, sync, and version your creations. Stay anonymous for quick one-shots.
             </div>
           </div>
@@ -409,38 +430,36 @@ export default function HomePage() {
                     setRollMode("auto");
                   }
                 }}
-                className={`text-left rounded-xl border px-4 py-4 transition pixel-border ${
+                className={`text-left rounded-xl px-4 py-4 transition cc-card cc-paper ${
                   builderType === option.key
-                    ? "border-amber-400/80 bg-amber-400/10"
-                    : "border-[#35355a] bg-[#11111b]/70 hover:border-amber-300/60 hover:bg-[#171727]"
+                    ? "ring-2 ring-[color:var(--accent)]/70"
+                    : "hover:brightness-110"
                 }`}
               >
-                <p className="text-sm uppercase tracking-[0.2em] text-slate-400">{option.key}</p>
-                <h3 className="text-lg font-semibold">{option.title}</h3>
-                <p className="mt-1 text-sm text-slate-300">{option.blurb}</p>
+                <p className="text-sm uppercase tracking-[0.2em] text-[color:var(--text)]/60">{option.key}</p>
+                <h3 className="text-lg font-semibold cc-title">{option.title}</h3>
+                <p className="mt-1 text-sm text-[color:var(--text)]/80">{option.blurb}</p>
               </button>
             ))}
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+        <section className="grid gap-6">
           <form
             onSubmit={handleSubmit}
-            className="space-y-6 rounded-2xl border border-[#35355a] bg-[#11111b]/80 p-6 shadow-xl shadow-black/30 pixel-border"
+            className="space-y-6 rounded-2xl cc-card cc-vignette p-6"
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Builder</p>
-                <h2 className="text-2xl font-semibold">
+                <p className="cc-ornament">Builder</p>
+                <h2 className="text-2xl font-semibold cc-title">
                   {builderType === "character" && "Player Character"}
                   {builderType === "enemy" && "Enemy / Monster"}
                   {builderType === "npc" && "Non-Player Character"}
                 </h2>
               </div>
-              <span className="rounded-full border border-amber-400/60 px-3 py-1 text-xs text-amber-200">
-                Rules aware
-              </span>
             </div>
+            <div className="cc-divider" />
 
             {builderType === "character" && (
               <fieldset className="space-y-2">
@@ -486,7 +505,9 @@ export default function HomePage() {
 
                 {rollMode === "standard_array" && (
                   <div className="mt-3 space-y-3">
-                    <p className="text-xs text-slate-400">Assign each value once.</p>
+                    <p className="text-xs text-[color:var(--text)]/70">
+                      Assign each value once.
+                    </p>
                     <div className="grid grid-cols-3 gap-2 text-sm">
                       {abilityKeys.map((key) => {
                         const used = new Set(
@@ -499,7 +520,7 @@ export default function HomePage() {
                           <label key={key} className="flex flex-col gap-1">
                             <span>{key}</span>
                             <select
-                              className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                              className="rounded px-2 py-1 cc-form-field"
                               value={standardAssignments[key]}
                               onChange={(e) => handleStandardAssignChange(key, e.target.value)}
                             >
@@ -519,20 +540,20 @@ export default function HomePage() {
 
                 {rollMode === "point_buy" && (
                   <div className="mt-3 space-y-3">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex items-center justify-between text-xs text-[color:var(--text)]/70">
                       <span>Spend 27 points (8–15 each)</span>
-                      <span className={pointsRemaining < 0 ? "text-red-300" : "text-emerald-300"}>
+                      <span className={pointsRemaining < 0 ? "text-red-400" : "text-emerald-500"}>
                         {pointsRemaining} points remaining
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       {abilityKeys.map((key) => (
-                        <div key={key} className="flex items-center justify-between rounded border border-slate-700 bg-slate-950 px-2 py-1">
+                        <div key={key} className="flex items-center justify-between rounded px-2 py-1 cc-form-field">
                           <span>{key}</span>
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              className="h-7 w-7 rounded border border-slate-600 text-slate-200 hover:border-amber-300"
+                              className="h-7 w-7 rounded border border-[color:var(--border)] text-[color:var(--text)] hover:brightness-110"
                               onClick={() => adjustPointBuy(key, -1)}
                             >
                               -
@@ -540,7 +561,7 @@ export default function HomePage() {
                             <span className="w-6 text-center">{pointBuyScores[key]}</span>
                             <button
                               type="button"
-                              className="h-7 w-7 rounded border border-slate-600 text-slate-200 hover:border-amber-300"
+                              className="h-7 w-7 rounded border border-[color:var(--border)] text-[color:var(--text)] hover:brightness-110"
                               onClick={() => adjustPointBuy(key, 1)}
                             >
                               +
@@ -560,9 +581,9 @@ export default function HomePage() {
                           <span>{key}</span>
                           <input
                             type="number"
-                            className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
-                            value={manualAssignments[key]}
-                            onChange={(e) => handleManualAssignChange(key, e.target.value)}
+                            className="rounded px-2 py-1 cc-form-field"
+                            value={abilities[key]}
+                            onChange={(e) => handleAbilityAssignChange(key, e.target.value)}
                             placeholder="score"
                           />
                         </label>
@@ -578,7 +599,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Race (optional)
                   <select
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={race}
                     onChange={(e) => setRace(e.target.value)}
                   >
@@ -592,7 +613,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Class (optional)
                   <select
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={klass}
                     onChange={(e) => setKlass(e.target.value)}
                   >
@@ -606,7 +627,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Level (optional)
                   <select
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={level}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -624,7 +645,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Alignment (optional)
                   <select
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={alignment}
                     onChange={(e) => setAlignment(e.target.value)}
                   >
@@ -638,7 +659,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Gender (optional)
                   <select
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
                   >
@@ -651,7 +672,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Age group (optional)
                   <select
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={ageGroup}
                     onChange={(e) => setAgeGroup(e.target.value)}
                   >
@@ -670,7 +691,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Creature type / origin
                   <input
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={enemyDetails.creatureType}
                     onChange={(e) => setEnemyDetails((p) => ({ ...p, creatureType: e.target.value }))}
                     placeholder="Undead knight, aberration, fiend..."
@@ -679,7 +700,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Difficulty (CR, party tier, vibe)
                   <input
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={enemyDetails.challenge}
                     onChange={(e) => setEnemyDetails((p) => ({ ...p, challenge: e.target.value }))}
                     placeholder="CR 5, deadly for level 3s..."
@@ -688,7 +709,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Environment
                   <input
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={enemyDetails.environment}
                     onChange={(e) => setEnemyDetails((p) => ({ ...p, environment: e.target.value }))}
                     placeholder="Swamp, astral sea, city rooftops..."
@@ -697,7 +718,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Signature tactics
                   <input
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={enemyDetails.tactics}
                     onChange={(e) => setEnemyDetails((p) => ({ ...p, tactics: e.target.value }))}
                     placeholder="Ambush grapples, fire magic, minions..."
@@ -711,7 +732,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Role
                   <input
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={npcDetails.role}
                     onChange={(e) => setNpcDetails((p) => ({ ...p, role: e.target.value }))}
                     placeholder="Quest giver, rival, patron..."
@@ -720,7 +741,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Personality
                   <input
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={npcDetails.demeanor}
                     onChange={(e) => setNpcDetails((p) => ({ ...p, demeanor: e.target.value }))}
                     placeholder="Gruff veteran, excitable scholar..."
@@ -729,7 +750,7 @@ export default function HomePage() {
                 <label className="flex flex-col gap-1">
                   Tie to party
                   <input
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                    className="rounded px-2 py-1 cc-form-field"
                     value={npcDetails.tie}
                     onChange={(e) => setNpcDetails((p) => ({ ...p, tie: e.target.value }))}
                     placeholder="Owes a favor, mentor, nemesis..."
@@ -742,7 +763,7 @@ export default function HomePage() {
               <label className="flex flex-col gap-1">
                 Short concept / vibe
                 <textarea
-                  className="min-h-[80px] rounded border border-slate-700 bg-slate-950 px-2 py-1"
+                  className="min-h-[80px] rounded px-2 py-1 cc-form-field"
                   value={concept}
                   onChange={(e) => setConcept(e.target.value)}
                   placeholder={
@@ -768,17 +789,17 @@ export default function HomePage() {
 
           <div className="space-y-4">
             {error && (
-              <div className="rounded-xl border border-red-800 bg-red-950/60 p-3 text-sm text-red-200 pixel-border">
+              <div className="rounded-xl border border-red-800 bg-red-950/60 p-3 text-sm text-red-200">
                 {error}
               </div>
             )}
 
             {result && (
-              <div className="rounded-2xl border border-[#35355a] bg-[#11111b]/80 p-4 space-y-3 text-sm pixel-border">
+              <div className="rounded-2xl cc-card cc-vignette p-4 space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <h2 className="text-base font-semibold">Result</h2>
-                  <span className="rounded-full border border-slate-700 px-2 py-0.5 text-xs text-slate-300">
-                    {builderType}
+                  <span className="rounded-full border border-[color:var(--border)] px-2 py-0.5 text-xs text-[color:var(--text)]/70">
+                    {displayEntityType(builderType)}
                   </span>
                 </div>
                 {result.question && (
@@ -796,19 +817,38 @@ export default function HomePage() {
               </div>
             )}
 
-            {!result && !error && (
-              <div className="rounded-2xl border border-[#35355a] bg-[#0c0c14]/80 p-4 text-sm text-slate-300 pixel-border">
-                <p className="font-semibold text-slate-100">How it works</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li>Pick Character, Enemy, or NPC to shape the prompt.</li>
-                  <li>Enter as little or as much detail as you like.</li>
-                  <li>We stick to 5e rules and hand back a ready-to-run blurb.</li>
-                </ul>
-              </div>
-            )}
           </div>
         </section>
+
       </div>
+
+      <footer className="cc-footer p-6 text-sm cc-ink w-full">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between max-w-6xl mx-auto">
+          <div className="space-y-2">
+            <p className="cc-title text-base font-bold">Character Conjuration</p>
+            <p className="text-sm">
+              A final year undergraduate synoptic project by Poppy Edwards.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <a className="underline" href="https://github.com/elfin-py/CharacterConjuration" target="_blank" rel="noreferrer">
+              GitHub repository
+            </a>
+            <a className="underline" href="https://github.com/elfin-py" target="_blank" rel="noreferrer">
+              GitHub profile
+            </a>
+            <a className="underline" href="https://dnd.wizards.com/" target="_blank" rel="noreferrer">
+              Dungeons &amp; Dragons official site
+            </a>
+            <a className="underline" href="https://gdpr.eu/" target="_blank" rel="noreferrer">
+              GDPR overview
+            </a>
+            <a className="underline" href="https://gdpr.eu/what-is-gdpr/" target="_blank" rel="noreferrer">
+              Data protection basics
+            </a>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }
