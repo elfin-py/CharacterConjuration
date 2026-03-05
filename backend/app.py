@@ -198,6 +198,10 @@ def generate_character(req: GenerateRequest):
                 "  \"ac\": 15,\n"
                 "  \"speed\": 30,\n"
                 "  \"stats\": {\"STR\":8,\"DEX\":14,\"CON\":12,\"INT\":16,\"WIS\":13,\"CHA\":10},\n"
+                "  \"size\": \"Medium\", // for enemies/monsters only\n"
+                "  \"creature_type\": \"humanoid (goblinoid)\", // for enemies/monsters only\n"
+                "  \"challenge_rating\": \"1/2\", // for enemies/monsters only\n"
+                "  \"senses\": \"darkvision 60 ft., passive Perception 10\", // for enemies/monsters only\n"
                 "  \"proficiencies\": [\"Arcana\",\"History\"],\n"
                 "  \"skill_proficiencies\": [\"History\", \"Perception\"], // explicit skill proficiencies by name\n"
                 "  \"saving_throw_proficiencies\": [\"WIS\", \"CHA\"],\n"
@@ -217,7 +221,7 @@ def generate_character(req: GenerateRequest):
                 "- Use a SINGLE class unless the user explicitly requests multiclass; otherwise choose one class/subclass that fits and matches the given race/background/alignment and concept (avoid defaulting to wizard or repeating the example). Never leave example placeholders in the final JSON.\n"
                 "- If level allows feats or ASIs and choices are implied or necessary, add them to the features array (include the feat names or note \"ASI\" with the adjusted scores).\n"
                 "- Prefer backgrounds, languages, spells, and gear found in the provided context/books.\n"
-                "- If entity_type is NPC, still fill the schema with NPC-appropriate class/background. If enemy, use class='enemy' and subclass as creature type and fill stats similarly.\n"
+                "- If entity_type is NPC, still fill the schema with NPC-appropriate class/background. If enemy, use class='enemy', include size/creature_type/challenge_rating/senses, and fill stats similarly.\n"
                 "Respond with JSON only, no commentary."
             ),
         },
@@ -688,6 +692,10 @@ import re
         "hitPoints": hp,
         "armorClass": ac,
         "speed": speed,
+        "size": parsed.get("size"),
+        "creature_type": parsed.get("creature_type"),
+        "challenge_rating": parsed.get("challenge_rating"),
+        "senses": parsed.get("senses"),
         "abilities": {
             "str": stats_norm["STR"],
             "dex": stats_norm["DEX"],
@@ -717,12 +725,16 @@ import re
         "spells": spells,
     }
 
-    return {
+    response = {
         "question": question,
         "answer": raw,
         "parsed": sheet_json,  # normalized values for UI
         "sheet_json": sheet_json,
     }
+    if (req.entity_type or "").lower() == "enemy":
+        response["stat_block"] = build_stat_block(sheet_json)
+    response["entity_type"] = req.entity_type
+    return response
 
 
 def build_pdf(sheet: dict) -> bytes:
@@ -772,6 +784,115 @@ def build_pdf(sheet: dict) -> bytes:
     out = BytesIO()
     pdf.output(out)
     return out.getvalue()
+
+
+def build_stat_block(sheet: dict) -> str:
+    def mod(score: int) -> str:
+        try:
+            val = int(score)
+        except Exception:
+            return "+0"
+        return f"{(val - 10) // 2:+d}"
+
+    name = sheet.get("name", "Unknown Creature")
+    size = sheet.get("size") or "Medium"
+    creature_type = sheet.get("creature_type") or sheet.get("subclass") or sheet.get("class") or "creature"
+    alignment = sheet.get("alignment") or "Unaligned"
+    ac = sheet.get("armorClass", "—")
+    hp = sheet.get("hitPoints", "—")
+    speed = sheet.get("speed", "—")
+
+    abilities = sheet.get("abilities", {}) or {}
+    abil_line = "  ".join(
+        f"{k} {abilities.get(k.lower(), abilities.get(k, '—'))} ({mod(abilities.get(k.lower(), abilities.get(k, 10)))})"
+        for k in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+    )
+
+    saving = sheet.get("saving_throw_proficiencies") or []
+    skills = sheet.get("skill_proficiencies") or []
+    senses = sheet.get("senses") or ""
+    languages = sheet.get("languages") or []
+    cr = sheet.get("challenge_rating") or ""
+
+    lines = [
+        name,
+        f"{size} {creature_type}, {alignment}",
+        f"Armor Class {ac}",
+        f"Hit Points {hp}",
+        f"Speed {speed} ft.",
+        "",
+        abil_line,
+        "",
+    ]
+
+    if saving:
+        lines.append(f"Saving Throws {', '.join(saving)}")
+    if skills:
+        lines.append(f"Skills {', '.join(skills)}")
+    if senses:
+        lines.append(f"Senses {senses}")
+    if languages:
+        lines.append(f"Languages {', '.join(languages)}")
+    if cr:
+        lines.append(f"Challenge {cr}")
+
+    traits = sheet.get("features") or []
+    attacks = sheet.get("attacks") or []
+    spells = sheet.get("spells") or {}
+
+    if traits:
+        lines.append("")
+        lines.append("Traits")
+        for t in traits:
+            lines.append(f"- {t}")
+
+    if spells:
+        lines.append("")
+        lines.append("Spellcasting")
+        for lvl, names in spells.items():
+            label = "Cantrips" if str(lvl).lower() in {"0", "cantrip", "cantrips"} else f"Level {lvl}"
+            lines.append(f"{label}: {', '.join(names)}")
+
+    if attacks:
+        lines.append("")
+        lines.append("Actions")
+        for a in attacks:
+            name = a.get("name", "Attack")
+            bonus = a.get("attack_bonus")
+            dmg = a.get("damage")
+            parts = [name]
+            if bonus is not None:
+                parts.append(f"+{bonus}")
+            if dmg:
+                parts.append(f"({dmg})")
+            lines.append("- " + " ".join(parts))
+
+    return "\n".join(lines)
+
+
+@app.post("/fill_statblock")
+def fill_statblock(req: SheetRequest):
+    if not req.sheet_json:
+        raise HTTPException(status_code=400, detail="sheet_json required")
+    try:
+        stat_text = build_stat_block(req.sheet_json)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Stat block build failed: {exc}")
+
+    from fastapi.responses import Response
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    for line in stat_text.splitlines():
+        pdf.multi_cell(0, 6, line)
+    out = BytesIO()
+    pdf.output(out)
+    return Response(
+        content=out.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=stat_block.pdf"},
+    )
 
 
 @app.post("/fill_sheet")
