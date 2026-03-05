@@ -735,6 +735,7 @@ import re
         "answer": raw,
         "parsed": sheet_json,  # normalized values for UI
         "sheet_json": sheet_json,
+        "used_model": used_model,
     }
     if (req.entity_type or "").lower() == "enemy":
         response["stat_block"] = build_stat_block(sheet_json)
