@@ -8,7 +8,8 @@ for characters, enemies, or NPCs. It:
 
 import os
 import random
-from typing import Optional, Dict, List
+import json
+from typing import Optional, Dict, List, Tuple
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -19,6 +20,7 @@ import logging
 import pickle
 from io import BytesIO
 from fpdf import FPDF
+import requests
 from fill_pdf import fill_pdf
 
 # Logger setup
@@ -459,6 +461,269 @@ def generate_character(req: GenerateRequest):
                 return mapped
         # If it already looks like full words, keep it.
         return trimmed
+
+    def max_spell_level_for_class(class_key: str, level: int) -> int:
+        if class_key in {"paladin", "ranger"}:
+            if level < 2:
+                return 0
+            if level <= 4:
+                return 1
+            if level <= 8:
+                return 2
+            if level <= 12:
+                return 3
+            if level <= 16:
+                return 4
+            return 5
+        if class_key == "artificer":
+            if level <= 4:
+                return 1
+            if level <= 8:
+                return 2
+            if level <= 12:
+                return 3
+            if level <= 16:
+                return 4
+            return 5
+        if class_key == "warlock":
+            if level <= 2:
+                return 1
+            if level <= 4:
+                return 2
+            if level <= 6:
+                return 3
+            if level <= 8:
+                return 4
+            return 5
+        # full casters
+        if level <= 2:
+            return 1
+        if level <= 4:
+            return 2
+        if level <= 6:
+            return 3
+        if level <= 8:
+            return 4
+        if level <= 10:
+            return 5
+        if level <= 12:
+            return 6
+        if level <= 14:
+            return 7
+        if level <= 16:
+            return 8
+        return 9
+
+    def cantrips_known_for(class_key: str, level: int) -> int:
+        tables = {
+            "bard": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+            "cleric": [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+            "druid": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+            "sorcerer": [4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+            "warlock": [2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+            "wizard": [3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+            "artificer": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
+        }
+        table = tables.get(class_key)
+        if not table:
+            return 0
+        return table[max(0, min(level, 20)) - 1]
+
+    def spells_known_for(class_key: str, level: int) -> int:
+        tables = {
+            "bard": [4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22],
+            "sorcerer": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15],
+            "warlock": [2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8],
+            "ranger": [0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11],
+        }
+        table = tables.get(class_key)
+        if not table:
+            return 0
+        return table[max(0, min(level, 20)) - 1]
+
+    def spells_prepared_for(class_key: str, level: int, stats: dict) -> int:
+        if class_key not in {"cleric", "druid", "wizard", "paladin", "artificer"}:
+            return 0
+        if class_key == "paladin" and level < 2:
+            return 0
+        ability = "WIS"
+        if class_key in {"wizard", "artificer"}:
+            ability = "INT"
+        if class_key == "paladin":
+            ability = "CHA"
+        mod_val = (stats.get(ability, 10) - 10) // 2
+        if class_key in {"paladin", "artificer"}:
+            base = max(1, level // 2)
+        else:
+            base = level
+        return max(1, base + mod_val)
+
+    def wizard_spellbook_total(level: int) -> int:
+        return 6 + max(level - 1, 0) * 2
+
+    SPELL_CACHE_PATH = "/private/tmp/cc_open5e_spells.json"
+
+    def fetch_open5e_spells() -> List[dict]:
+        try:
+            if os.path.exists(SPELL_CACHE_PATH):
+                with open(SPELL_CACHE_PATH, "r", encoding="utf-8") as fh:
+                    return json.load(fh)
+        except Exception:
+            pass
+        spells: List[dict] = []
+        url = "https://api.open5e.com/spells/?limit=200"
+        try:
+            while url:
+                resp = requests.get(url, timeout=12)
+                resp.raise_for_status()
+                data = resp.json()
+                spells.extend(data.get("results", []))
+                url = data.get("next")
+        except Exception as exc:
+            logger.warning("Failed to fetch Open5e spells: %s", exc)
+            return []
+        try:
+            with open(SPELL_CACHE_PATH, "w", encoding="utf-8") as fh:
+                json.dump(spells, fh)
+        except Exception:
+            pass
+        return spells
+
+    def extract_spell_classes(spell: dict) -> List[str]:
+        for key in ["spell_lists", "spell_list", "classes", "class_list", "dnd_class"]:
+            val = spell.get(key)
+            if not val:
+                continue
+            if isinstance(val, list):
+                out = []
+                for item in val:
+                    if isinstance(item, str):
+                        out.append(item)
+                    elif isinstance(item, dict) and "name" in item:
+                        out.append(item["name"])
+                return [x.strip().lower() for x in out if str(x).strip()]
+            if isinstance(val, str):
+                return [x.strip().lower() for x in val.split(",") if x.strip()]
+        return []
+
+    def class_spell_pool(class_key: str, max_level: int) -> List[dict]:
+        spells = fetch_open5e_spells()
+        if not spells:
+            return []
+        # Prefer SRD if available
+        srd_spells = [s for s in spells if s.get("document__slug") in {"wotc-srd", "srd"}]
+        pool = srd_spells if srd_spells else spells
+        out = []
+        for spell in pool:
+            try:
+                level_val = int(spell.get("level", 0))
+            except Exception:
+                level_val = 0
+            if level_val > max_level:
+                continue
+            classes = extract_spell_classes(spell)
+            if class_key in classes:
+                out.append(spell)
+        return out
+
+    def normalise_spells_for_class(spells_obj: dict, class_key: str, level: int, stats: dict) -> Tuple[dict, dict]:
+        max_level = max_spell_level_for_class(class_key, level)
+        if max_level == 0:
+            return {}, {
+                "max_spell_level": 0,
+                "cantrips_expected": 0,
+                "spells_known_expected": 0,
+                "spells_prepared_expected": 0,
+                "wizard_spellbook_total": 0,
+            }
+        cantrips_needed = cantrips_known_for(class_key, level)
+        known_needed = spells_known_for(class_key, level)
+        prepared_needed = spells_prepared_for(class_key, level, stats)
+        spellbook_total = wizard_spellbook_total(level) if class_key == "wizard" else 0
+
+        pool = class_spell_pool(class_key, max_level)
+        if not pool:
+            return spells_obj if isinstance(spells_obj, dict) else {}, {
+                "max_spell_level": max_level,
+                "cantrips_expected": cantrips_needed,
+                "spells_known_expected": known_needed,
+                "spells_prepared_expected": prepared_needed,
+                "wizard_spellbook_total": spellbook_total,
+                "source": "model",
+            }
+        pool_by_level: Dict[int, List[str]] = {}
+        for spell in pool:
+            lvl = int(spell.get("level", 0))
+            pool_by_level.setdefault(lvl, []).append(spell.get("name"))
+
+        def pick(levels: List[int], count: int) -> List[str]:
+            picks: List[str] = []
+            for lvl in levels:
+                options = pool_by_level.get(lvl, [])
+                random.shuffle(options)
+                for name in options:
+                    if name not in picks:
+                        picks.append(name)
+                    if len(picks) >= count:
+                        return picks
+            return picks
+
+        normalised: Dict[str, List[str]] = {}
+        if class_key in {"bard", "cleric", "druid", "sorcerer", "warlock", "wizard", "artificer"}:
+            cantrip_list = spells_obj.get("cantrip") if isinstance(spells_obj, dict) else []
+            cantrip_list = [c for c in (cantrip_list or []) if isinstance(c, str)]
+            if len(cantrip_list) < cantrips_needed:
+                cantrip_list.extend(pick([0], cantrips_needed - len(cantrip_list)))
+            normalised["cantrip"] = cantrip_list[:cantrips_needed] if cantrips_needed else cantrip_list
+
+        # Determine how many non-cantrip spells to provide
+        total_non_cantrip = known_needed or prepared_needed or max(1, level)
+        if class_key == "wizard":
+            total_non_cantrip = max(total_non_cantrip, spellbook_total)
+
+        # Collect existing spells within allowed levels
+        existing: Dict[int, List[str]] = {}
+        if isinstance(spells_obj, dict):
+            for key, value in spells_obj.items():
+                if key == "cantrip":
+                    continue
+                try:
+                    lvl = int(str(key).strip())
+                except Exception:
+                    continue
+                if lvl > max_level:
+                    continue
+                if isinstance(value, list):
+                    existing[lvl] = [v for v in value if isinstance(v, str)]
+
+        flat_existing = [name for lvl in sorted(existing) for name in existing[lvl]]
+        needed = max(0, total_non_cantrip - len(flat_existing))
+
+        if needed > 0:
+            level_order = list(range(max_level, 0, -1))
+            extra = pick(level_order, needed)
+            flat_existing.extend(extra)
+
+        # Re-split into spell levels (roughly even, biasing higher levels)
+        level_buckets = {lvl: [] for lvl in range(1, max_level + 1)}
+        for name in flat_existing:
+            for lvl in range(max_level, 0, -1):
+                if name in pool_by_level.get(lvl, []):
+                    level_buckets[lvl].append(name)
+                    break
+        for lvl, names in level_buckets.items():
+            if names:
+                normalised[str(lvl)] = names
+
+        breakdown = {
+            "max_spell_level": max_level,
+            "cantrips_expected": cantrips_needed,
+            "spells_known_expected": known_needed,
+            "spells_prepared_expected": prepared_needed,
+            "wizard_spellbook_total": spellbook_total,
+            "source": "open5e",
+        }
+        return normalised, breakdown
 
     def missing_required_fields(parsed_obj: dict) -> list[str]:
         missing = []
@@ -944,6 +1209,13 @@ def generate_character(req: GenerateRequest):
         spell_save_dc = 8 + pb + spell_mod
         spell_attack_bonus = pb + spell_mod
 
+    spells_breakdown = None
+    if class_key in {"bard", "cleric", "druid", "sorcerer", "warlock", "wizard", "artificer", "paladin", "ranger"} and level >= 1:
+        try:
+            spells, spells_breakdown = normalise_spells_for_class(spells, class_key, level, stats_norm)
+        except Exception as exc:
+            logger.warning("Spell normalization failed: %s", exc)
+
     calc_breakdown = {
         "proficiency_bonus": {
             "formula": f"2 + floor((level-1)/4) = {pb}",
@@ -974,6 +1246,8 @@ def generate_character(req: GenerateRequest):
             "spell_attack_bonus": spell_attack_bonus,
             "formula": f"DC 8 + PB({pb}) + {spell_ability}({spell_mod}); attack PB({pb}) + {spell_ability}({spell_mod})",
         }
+    if spells_breakdown:
+        calc_breakdown["spells"] = spells_breakdown
 
     # Apply saving throw profs from JSON if provided
     if saving_throw_profs:

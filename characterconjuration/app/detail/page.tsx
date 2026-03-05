@@ -118,6 +118,12 @@ export default function DetailPage() {
               {hover(\"Ability\", calc.spellcasting.ability)}
               {hover(\"Spell Save DC\", calc.spellcasting.spell_save_dc, calc.spellcasting.formula)}
               {hover(\"Spell Attack Bonus\", calc.spellcasting.spell_attack_bonus, calc.spellcasting.formula)}
+              {calc?.spells &&
+                hover(
+                  \"Spell counts\",
+                  `Max L${calc.spells.max_spell_level}`,
+                  `Cantrips ${calc.spells.cantrips_expected}, Known ${calc.spells.spells_known_expected}, Prepared ${calc.spells.spells_prepared_expected}`,
+                )}
             </div>
           </section>
         )}
