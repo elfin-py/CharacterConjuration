@@ -626,7 +626,7 @@ def generate_character(req: GenerateRequest):
                 out.append(spell)
         return out
 
-    def normalise_spells_for_class(spells_obj: dict, class_key: str, level: int, stats: dict) -> Tuple[dict, dict]:
+    def normalise_spells_for_class(spells_obj: dict, class_key: str, level: int, stats: dict) -> Tuple[dict, dict, dict]:
         max_level = max_spell_level_for_class(class_key, level)
         if max_level == 0:
             return {}, {
@@ -650,6 +650,10 @@ def generate_character(req: GenerateRequest):
                 "spells_prepared_expected": prepared_needed,
                 "wizard_spellbook_total": spellbook_total,
                 "source": "model",
+            }, {
+                "spells_known": [],
+                "spells_prepared": [],
+                "spellbook": [],
             }
         pool_by_level: Dict[int, List[str]] = {}
         for spell in pool:
@@ -715,6 +719,19 @@ def generate_character(req: GenerateRequest):
             if names:
                 normalised[str(lvl)] = names
 
+        # Known vs prepared vs spellbook lists
+        spells_known_list: List[str] = []
+        spells_prepared_list: List[str] = []
+        spellbook_list: List[str] = []
+
+        if class_key == "wizard":
+            spellbook_list = flat_existing[:spellbook_total]
+            spells_prepared_list = flat_existing[:prepared_needed] if prepared_needed else []
+        elif class_key in {"cleric", "druid", "paladin", "artificer"}:
+            spells_prepared_list = flat_existing[:prepared_needed] if prepared_needed else flat_existing
+        else:
+            spells_known_list = flat_existing[:known_needed] if known_needed else flat_existing
+
         breakdown = {
             "max_spell_level": max_level,
             "cantrips_expected": cantrips_needed,
@@ -723,7 +740,11 @@ def generate_character(req: GenerateRequest):
             "wizard_spellbook_total": spellbook_total,
             "source": "open5e",
         }
-        return normalised, breakdown
+        return normalised, breakdown, {
+            "spells_known": spells_known_list,
+            "spells_prepared": spells_prepared_list,
+            "spellbook": spellbook_list,
+        }
 
     def missing_required_fields(parsed_obj: dict) -> list[str]:
         missing = []
@@ -1210,9 +1231,10 @@ def generate_character(req: GenerateRequest):
         spell_attack_bonus = pb + spell_mod
 
     spells_breakdown = None
+    spells_lists = {"spells_known": [], "spells_prepared": [], "spellbook": []}
     if class_key in {"bard", "cleric", "druid", "sorcerer", "warlock", "wizard", "artificer", "paladin", "ranger"} and level >= 1:
         try:
-            spells, spells_breakdown = normalise_spells_for_class(spells, class_key, level, stats_norm)
+            spells, spells_breakdown, spells_lists = normalise_spells_for_class(spells, class_key, level, stats_norm)
         except Exception as exc:
             logger.warning("Spell normalization failed: %s", exc)
 
@@ -1296,6 +1318,9 @@ def generate_character(req: GenerateRequest):
         "spell_attack_bonus": spell_attack_bonus,
         "attacks": attacks,
         "spells": spells,
+        "spells_known": spells_lists.get("spells_known", []),
+        "spells_prepared": spells_lists.get("spells_prepared", []),
+        "spellbook": spells_lists.get("spellbook", []),
         "calc_breakdown": calc_breakdown,
     }
 
