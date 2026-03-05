@@ -233,7 +233,8 @@ def generate_character(req: GenerateRequest):
             detail=f"Upstream model error: {exc}. Configure HF_MODEL or HF_MODEL_CANDIDATES with supported chat models.",
         )
 
-    import json
+import json
+import re
 
     parsed = None
     def longest_balanced_prefix(text: str) -> str:
@@ -475,6 +476,24 @@ def generate_character(req: GenerateRequest):
         "perception": "WIS",
         "arcana": "INT",
     }
+    def normalize_skill_name(name: str) -> str:
+        key = re.sub(r"[^a-z]", "", name.lower())
+        aliases = {
+            "animalhandling": "animal",
+            "sleightofhand": "sleightofhand",
+        }
+        return aliases.get(key, key)
+
+    def dedupe(seq):
+        seen = set()
+        out = []
+        for item in seq:
+            if item not in seen:
+                seen.add(item)
+                out.append(item)
+        return out
+
+    skill_profs = [normalize_skill_name(p) for p in (skill_profs or [])]
     profs_lower = [p.lower() for p in (skill_profs or [])]
 
     def skill_bonus(skill_key: str):
@@ -500,12 +519,45 @@ def generate_character(req: GenerateRequest):
         "wizard": (2, ["arcana", "history", "insight", "investigation", "medicine", "religion"]),
         "artificer": (2, ["arcana", "history", "investigation", "medicine", "nature", "perception", "sleightofhand"]),
     }
+    background_skill_map = {
+        "acolyte": ["insight", "religion"],
+        "criminal": ["deception", "stealth"],
+        "folk hero": ["animal", "survival"],
+        "noble": ["history", "persuasion"],
+        "sage": ["arcana", "history"],
+        "soldier": ["athletics", "intimidation"],
+        "urchin": ["sleightofhand", "stealth"],
+        "outlander": ["athletics", "survival"],
+        "entertainer": ["acrobatics", "performance"],
+        "guild artisan": ["insight", "persuasion"],
+        "sailor": ["athletics", "perception"],
+        "hermit": ["medicine", "religion"],
+        "city watch": ["athletics", "insight"],
+        "far traveler": ["insight", "perception"],
+    }
+    bg_key = (background or "").lower()
+    bg_skills = background_skill_map.get(bg_key, [])
+
+    cls_skill_count = None
+    cls_skill_opts = None
+    for cls, (n, opts) in class_skill_options.items():
+        if cls in cls_lower:
+            cls_skill_count = n
+            cls_skill_opts = opts
+            break
+
+    if skill_profs:
+        allowed = set(cls_skill_opts or skill_names.keys()) | set(bg_skills)
+        skill_profs = [p for p in skill_profs if p in allowed]
+        skill_profs = dedupe(skill_profs + [s for s in bg_skills if s in allowed])
     if not skill_profs:
-        for cls, (n, opts) in class_skill_options.items():
-            if cls in cls_lower:
-                skill_profs = random.sample(opts, min(n, len(opts)))
-                profs_lower = [p.lower() for p in skill_profs]
-                break
+        picked = list(bg_skills)
+        if cls_skill_opts:
+            remaining = max(0, (cls_skill_count or 0) - len(picked))
+            pool = [s for s in cls_skill_opts if s not in picked]
+            picked += random.sample(pool, min(remaining, len(pool)))
+        skill_profs = dedupe(picked)
+    profs_lower = [p.lower() for p in skill_profs]
 
     skills = {k: skill_bonus(k) for k in skill_names}
     passive_perception = 10 + skills["perception"]
