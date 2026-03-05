@@ -436,6 +436,29 @@ def generate_character(req: GenerateRequest):
             return "rogue"
         return "fighter"
 
+    alignment_map = {
+        "LG": "Lawful Good",
+        "NG": "Neutral Good",
+        "CG": "Chaotic Good",
+        "LN": "Lawful Neutral",
+        "TN": "True Neutral",
+        "CN": "Chaotic Neutral",
+        "LE": "Lawful Evil",
+        "NE": "Neutral Evil",
+        "CE": "Chaotic Evil",
+    }
+
+    def normalize_alignment(value: Optional[str]) -> str:
+        if not value:
+            return "Unspecified"
+        trimmed = value.strip()
+        if len(trimmed) <= 2:
+            mapped = alignment_map.get(trimmed.upper())
+            if mapped:
+                return mapped
+        # If it already looks like full words, keep it.
+        return trimmed
+
     def missing_required_fields(parsed_obj: dict) -> list[str]:
         missing = []
         required_text = ["name", "race", "class", "subclass", "background", "alignment", "short_blurb"]
@@ -628,7 +651,7 @@ def generate_character(req: GenerateRequest):
     level = coerce_int(parsed.get("level") or req.level)
     if not level:
         level = random.randint(2, 10)
-    alignment = parsed.get("alignment") or req.alignment or "Unspecified"
+    alignment = normalize_alignment(parsed.get("alignment") or req.alignment)
     gender = parsed.get("gender") or req.gender or "Unspecified"
     age_group = parsed.get("age_group") or req.age_group or "Unspecified"
     background = parsed.get("background") or "Unspecified"
