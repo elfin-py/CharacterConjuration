@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 type RollMode = "auto" | "standard_array" | "manual";
 type BuilderType = "character" | "enemy" | "npc";
@@ -77,6 +76,21 @@ const builderOptions: {
   },
 ];
 
+const loadingPhrases = [
+  "Camouflaging mimics",
+  "Reading action economy",
+  "Preparing spells",
+  "Fireballing in a 5x5 room",
+  "Sharpening daggers",
+  "Rolling stealth checks",
+  "Counting rations",
+  "Arguing about initiative",
+  "Negotiating with goblins",
+  "Polishing a lucky d20",
+  "Mapping the dungeon",
+  "Consulting the sage",
+];
+
 export default function HomePage() {
   const router = useRouter();
   // Primary builder selection
@@ -114,6 +128,8 @@ export default function HomePage() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [loadingPhraseIndex, setLoadingPhraseIndex] = useState(0);
+  const [loadingDots, setLoadingDots] = useState("");
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [backendUp, setBackendUp] = useState<boolean | null>(null);
@@ -131,6 +147,27 @@ export default function HomePage() {
     const id = setInterval(ping, 15000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingDots("");
+      setLoadingPhraseIndex(0);
+      return;
+    }
+
+    const dotsTimer = setInterval(() => {
+      setLoadingDots((prev) => (prev.length >= 3 ? "" : `${prev}.`));
+    }, 450);
+
+    const phraseTimer = setInterval(() => {
+      setLoadingPhraseIndex((prev) => (prev + 1) % loadingPhrases.length);
+    }, 2200);
+
+    return () => {
+      clearInterval(dotsTimer);
+      clearInterval(phraseTimer);
+    };
+  }, [loading]);
 
   const handleManualRollChange = (index: number, value: string) => {
     const next = [...manualRolls];
@@ -240,6 +277,28 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen text-slate-50">
+      {loading && (
+        <div className="fixed inset-0 z-50 grid place-items-center loading-overlay">
+          <div className="w-[320px] rounded-2xl border border-[#35355a] bg-[#0e0e17]/80 p-6 text-center pixel-border">
+            <div className="potion-wrap">
+              <div className="potion-neck" />
+              <div className="potion-bottle" />
+              <div className="potion-liquid" />
+              <div className="potion-glint" />
+              <span className="potion-bubble b1" />
+              <span className="potion-bubble b2" />
+              <span className="potion-bubble b3" />
+            </div>
+            <p className="mt-4 text-sm uppercase tracking-[0.2em] text-amber-200">
+              Conjuring
+            </p>
+            <p className="mt-2 text-sm text-slate-200">
+              {loadingPhrases[loadingPhraseIndex]}
+              <span className="loading-ellipsis">{loadingDots}</span>
+            </p>
+          </div>
+        </div>
+      )}
       <div className="max-w-6xl mx-auto px-6 pb-12">
         <header className="sticky top-0 z-10 -mx-6 mb-6 bg-[#0b0b13]/85 backdrop-blur border-b border-[#242437] px-6 py-4">
           <div className="flex items-center justify-between">
