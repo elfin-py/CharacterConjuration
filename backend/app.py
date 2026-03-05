@@ -151,8 +151,9 @@ def build_question(req: GenerateRequest) -> str:
         question += " Use the standard array (15, 14, 13, 12, 10, 8) for abilities; assign logically."
     elif req.roll_mode == "point_buy":
         question += " Use the 27-point buy system (8-15 before bonuses) for abilities."
-    elif req.roll_mode == "manual" and req.manual_rolls:
-        question += f" Use these rolled scores {req.manual_rolls} for abilities."
+    elif req.roll_mode == "manual":
+        if req.manual_rolls:
+            question += f" Use these rolled scores {req.manual_rolls} for abilities."
         if req.ability_assignment:
             question += f" Apply this assignment: {req.ability_assignment}."
     else:

@@ -98,7 +98,6 @@ export default function HomePage() {
   const [builderType, setBuilderType] = useState<BuilderType>("character");
   // Character-only ability inputs
   const [rollMode, setRollMode] = useState<RollMode>("auto");
-  const [manualRolls, setManualRolls] = useState<string[]>(["", "", "", "", "", ""]);
   const [manualAssignments, setManualAssignments] = useState<Record<string, string>>({
     STR: "",
     DEX: "",
@@ -185,12 +184,6 @@ export default function HomePage() {
       clearInterval(phraseTimer);
     };
   }, [loading]);
-
-  const handleManualRollChange = (index: number, value: string) => {
-    const next = [...manualRolls];
-    next[index] = value;
-    setManualRolls(next);
-  };
 
   const handleManualAssignChange = (key: string, value: string) => {
     setManualAssignments((prev) => ({ ...prev, [key]: value }));
@@ -282,11 +275,7 @@ export default function HomePage() {
 
     if (builderType === "character") {
       if (effectiveRollMode === "manual") {
-        body.manual_rolls = manualRolls
-          .map((v) => v.trim())
-          .filter((v) => v !== "")
-          .map((v) => Number(v));
-
+        body.manual_rolls = null;
         body.ability_assignment = Object.fromEntries(
           Object.entries(manualAssignments)
             .filter(([, v]) => v.trim() !== "")
@@ -567,18 +556,6 @@ export default function HomePage() {
 
                 {rollMode === "manual" && (
                   <div className="mt-3 space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      {manualRolls.map((v, i) => (
-                        <input
-                          key={i}
-                          type="number"
-                          className="w-14 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm"
-                          value={v}
-                          onChange={(e) => handleManualRollChange(i, e.target.value)}
-                          placeholder={String(i + 1)}
-                        />
-                      ))}
-                    </div>
                     <div className="grid grid-cols-3 gap-2 text-sm">
                       {abilityKeys.map((key) => (
                         <label key={key} className="flex flex-col gap-1">
