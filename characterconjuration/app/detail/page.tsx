@@ -104,18 +104,22 @@ export default function DetailPage() {
           </div>
         </div>
       </header>
-      <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--accent)]">Your conjuration</p>
-            <h1 className="text-3xl font-semibold capitalize cc-title">
-              {data.entity_type || "character"}
-            </h1>
-          </div>
-          <div className="flex gap-2 text-sm">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+        <section className="rounded-2xl cc-card cc-vignette p-6 space-y-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="space-y-2">
+              <p className="cc-ornament">Your conjuration</p>
+              <h1 className="text-3xl md:text-4xl font-semibold capitalize cc-title">
+                {data.entity_type || "character"}
+              </h1>
+              <p className="text-sm cc-ink">
+                Review the generated details below. Download the sheet or stat block if you need a printable copy.
+              </p>
+            </div>
+            <div className="flex gap-2 text-sm flex-wrap">
             {isEnemy ? (
               <button
-                className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 font-semibold hover:bg-[color:var(--surface)] transition"
+                className="pixel-btn rounded-lg cc-paper border border-[color:var(--border)] px-3 py-2 font-semibold hover:brightness-110 transition"
                 disabled={!data.sheet_json}
                 onClick={async () => {
                   if (!data.sheet_json) return;
@@ -146,7 +150,7 @@ export default function DetailPage() {
               </button>
             ) : isNpc ? null : (
               <button
-                className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 font-semibold hover:bg-[color:var(--surface)] transition"
+                className="pixel-btn rounded-lg cc-paper border border-[color:var(--border)] px-3 py-2 font-semibold hover:brightness-110 transition"
                 disabled={!data.sheet_json}
                 onClick={async () => {
                   if (!data.sheet_json) return;
@@ -178,12 +182,13 @@ export default function DetailPage() {
             )}
             <Link
               href="/"
-              className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 hover:bg-[color:var(--surface)] transition"
+              className="pixel-btn rounded-lg cc-paper border border-[color:var(--border)] px-3 py-2 hover:brightness-110 transition"
             >
               Back
             </Link>
           </div>
-        </div>
+          </div>
+        </section>
 
         <div className="rounded-2xl cc-card cc-vignette p-4 space-y-3 text-sm">
           {isEnemy && data.stat_block && (
