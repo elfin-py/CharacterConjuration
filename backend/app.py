@@ -198,7 +198,7 @@ def generate_character(req: GenerateRequest):
                 "  \"ac\": 15,\n"
                 "  \"speed\": 30,\n"
                 "  \"stats\": {\"STR\":8,\"DEX\":14,\"CON\":12,\"INT\":16,\"WIS\":13,\"CHA\":10},\n"
-                "  \"size\": \"Medium\", // for enemies/monsters only\n"
+                "  \"size\": \"Medium\", // size category for the creature (Small/Medium/Large/etc.)\n"
                 "  \"creature_type\": \"humanoid (goblinoid)\", // for enemies/monsters only\n"
                 "  \"challenge_rating\": \"1/2\", // for enemies/monsters only\n"
                 "  \"senses\": \"darkvision 60 ft., passive Perception 10\", // for enemies/monsters only\n"
@@ -681,6 +681,11 @@ import re
                 val += pb
             saving_throws[abil] = val
 
+    size = parsed.get("size")
+    if not size:
+        small_races = {"gnome", "halfling"}
+        size = "Small" if (race or "").lower() in small_races else "Medium"
+
     sheet_json = {
         "name": parsed.get("name"),
         "class": class_name,
@@ -692,7 +697,7 @@ import re
         "hitPoints": hp,
         "armorClass": ac,
         "speed": speed,
-        "size": parsed.get("size"),
+        "size": size,
         "creature_type": parsed.get("creature_type"),
         "challenge_rating": parsed.get("challenge_rating"),
         "senses": parsed.get("senses"),

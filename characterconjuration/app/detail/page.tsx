@@ -26,7 +26,9 @@ export default function DetailPage() {
     }
   }, []);
 
-  const isEnemy = (data?.entity_type || "").toLowerCase() === "enemy";
+  const entityType = (data?.entity_type || "").toLowerCase();
+  const isEnemy = entityType === "enemy";
+  const isNpc = entityType === "npc";
 
   if (!data) {
     return (
@@ -87,7 +89,7 @@ export default function DetailPage() {
               >
                 Download stat block
               </button>
-            ) : (
+            ) : isNpc ? null : (
               <button
                 className="pixel-btn rounded-lg bg-amber-300 text-[#111] px-3 py-2 font-semibold hover:bg-amber-200 transition"
                 disabled={!data.sheet_json}
@@ -151,6 +153,7 @@ export default function DetailPage() {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Basics</p>
                 <ul className="space-y-1 text-slate-200">
                   <li><strong>Name:</strong> {parsed.name || "—"}</li>
+                  <li><strong>Size:</strong> {parsed.size || "—"}</li>
                   <li><strong>Race:</strong> {parsed.race || "—"}</li>
                   <li><strong>Class/Subclass:</strong> {parsed.class || "—"} {parsed.subclass ? `(${parsed.subclass})` : ""}</li>
                   <li><strong>Level:</strong> {parsed.level ?? "—"}</li>
@@ -161,17 +164,19 @@ export default function DetailPage() {
                   <li><strong>HP / AC / Speed:</strong> {hp} / {ac} / {speed} ft</li>
                 </ul>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Abilities</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {["STR", "DEX", "CON", "INT", "WIS", "CHA"].map((k) => (
-                    <div key={k} className="rounded border border-[#35355a] bg-[#0c0c14]/60 px-2 py-1 text-center">
-                      <p className="text-xs text-slate-400">{k}</p>
-                      <p className="text-base font-semibold">{stats?.[k] ?? stats?.[k.toLowerCase()] ?? "—"}</p>
-                    </div>
-                  ))}
+              {!isNpc && (
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Abilities</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {["STR", "DEX", "CON", "INT", "WIS", "CHA"].map((k) => (
+                      <div key={k} className="rounded border border-[#35355a] bg-[#0c0c14]/60 px-2 py-1 text-center">
+                        <p className="text-xs text-slate-400">{k}</p>
+                        <p className="text-base font-semibold">{stats?.[k] ?? stats?.[k.toLowerCase()] ?? "—"}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
