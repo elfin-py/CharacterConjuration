@@ -332,20 +332,12 @@ export default function HomePage() {
     <main className="min-h-screen text-[color:var(--text)]">
       {loading && (
         <div className="fixed inset-0 z-50 grid place-items-center loading-overlay">
-          <div className="w-[320px] rounded-2xl border border-[#35355a] bg-[#0e0e17]/80 p-6 text-center pixel-border">
-            <div className="potion-wrap">
-              <div className="potion-neck" />
-              <div className="potion-bottle" />
-              <div className="potion-liquid" />
-              <div className="potion-glint" />
-              <span className="potion-bubble b1" />
-              <span className="potion-bubble b2" />
-              <span className="potion-bubble b3" />
-            </div>
-            <p className="mt-4 text-sm uppercase tracking-[0.2em] text-amber-200">
+          <div className="w-[320px] rounded-2xl cc-card cc-vignette p-6 text-center">
+            <div className="loader mx-auto" />
+            <p className="mt-4 text-sm uppercase tracking-[0.2em] cc-ink">
               Conjuring
             </p>
-            <p className="mt-2 text-sm text-slate-200">
+            <p className="mt-2 text-sm cc-ink">
               {loadingPhrases[loadingPhraseIndex]}
               <span className="loading-ellipsis">{loadingDots}</span>
             </p>

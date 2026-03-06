@@ -50,11 +50,12 @@ export default function DetailPage() {
   const hp = parsed.hp ?? parsed.hitPoints ?? "—";
   const ac = parsed.ac ?? parsed.armorClass ?? "—";
   const speed = parsed.speed ?? "—";
+  const rawJson = data.sheet_json ?? data.parsed ?? data;
 
   return (
-    <main className="min-h-screen text-[color:var(--text)]">
+    <main className="min-h-screen text-[color:var(--text)] flex flex-col">
       <NavBar />
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6 flex-1 w-full">
         <section className="rounded-2xl cc-card cc-vignette p-6 space-y-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="space-y-2">
@@ -63,7 +64,7 @@ export default function DetailPage() {
                 {data.entity_type || "character"}
               </h1>
               <p className="text-sm cc-ink">
-                Review the generated details below. Download the sheet or stat block if you need a printable copy.
+                Review the generated details below. Download the sheet for a printable/editable copy.
               </p>
             </div>
             <div className="flex gap-2 text-sm flex-wrap">
@@ -191,6 +192,15 @@ export default function DetailPage() {
               )}
             </div>
           )}
+
+          <details className="rounded-lg cc-card cc-paper p-3">
+            <summary className="cursor-pointer text-xs uppercase tracking-[0.2em] text-[color:var(--text)]/70">
+              Show raw JSON
+            </summary>
+            <pre className="mt-3 whitespace-pre-wrap text-xs cc-ink">
+              {JSON.stringify(rawJson, null, 2)}
+            </pre>
+          </details>
         </div>
       </div>
 

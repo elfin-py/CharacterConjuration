@@ -216,7 +216,7 @@ def generate_character(req: GenerateRequest):
                 "  \"spells\": {\"cantrip\": [\"Fire Bolt\"], \"1\": [\"Shield\",\"Magic Missile\"]},\n"
                 "  \"gender\": \"...\" (male, female, or nonbinary as requested or fitting),\n"
                 "  \"age_group\": \"...\" (young, adult, middle-aged, elder; pick something plausible for race/level),\n"
-                "  \"short_blurb\": \"2-3 sentences of character building linking age, race, class, subclass, background, through a short description.\"\n"
+                "  \"short_blurb\": \"Write a sizable descriptive paragraph (4-6 sentences). Build on the user's concept if provided, and weave age, race, class, subclass, background, goals, and a memorable detail or flaw.\"\n"
                 "}\n"
                 "- stats must be an object with STR, DEX, CON, INT, WIS, CHA integers (not strings).\n"
                 "- hp, ac, speed, level must be integers (not strings).\n"
@@ -282,8 +282,6 @@ def generate_character(req: GenerateRequest):
 
     if not isinstance(parsed, dict):
         # fallback: extract key fields with regex even if JSON malformed
-        import re
-
         def grab(key, default=None):
             m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', raw, re.I)
             return m.group(1) if m else default

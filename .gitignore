@@ -1,0 +1,13 @@
+backend/venv/
+backend/.env
+backend/__pycache__/
+backend/character_index.pkl
+backend/data/pdf/*.pdf
+backend/data/pdf/*.PDF
+backend/data/split_md/
+backend/data/md/
+backend/data/pdf_to_md.py
+!backend/data/pdf/5E_CharacterSheet_Fillable.pdf
+
+characterconjuration/node_modules/
+characterconjuration/.next/

@@ -1,0 +1,6 @@
+{
+  "python.defaultInterpreterPath": "/Users/poppyelfin/Documents/School/COMP3932 Synoptic Project/CharacterConjuration/backend/venv/bin/python",
+  "python.analysis.extraPaths": [
+    "/Users/poppyelfin/Documents/School/COMP3932 Synoptic Project/CharacterConjuration/backend"
+  ]
+}
