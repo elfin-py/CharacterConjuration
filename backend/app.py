@@ -8,6 +8,8 @@ for characters, enemies, or NPCs. It:
 
 import os
 import random
+import json
+import re
 from typing import Optional, Dict, List
 
 from fastapi import FastAPI, HTTPException
@@ -240,10 +242,8 @@ def generate_character(req: GenerateRequest):
             detail=f"Upstream model error: {exc}. Configure HF_MODEL or HF_MODEL_CANDIDATES with supported chat models.",
         )
 
-import json
-import re
-
     parsed = None
+
     def longest_balanced_prefix(text: str) -> str:
         brace = bracket = 0
         in_str = False
@@ -271,7 +271,6 @@ import re
         parsed = json.loads(raw)
     except Exception:
         # try to extract first JSON object from the text
-        import re
         m = re.search(r"\{.*", raw, re.S)
         parsed = None
         if m:
