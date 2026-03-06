@@ -55,6 +55,10 @@ html[data-theme="dark"] {
   --shadow: rgba(0, 0, 0, 0.65);
 }
 
+html, body {
+  background: var(--background);
+}
+
 body {
   background: var(--background);
   color: var(--text);
