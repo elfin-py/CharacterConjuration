@@ -119,7 +119,7 @@ export default function DetailPage() {
             <div className="flex gap-2 text-sm flex-wrap">
             {isEnemy ? (
               <button
-                className="pixel-btn rounded-lg cc-paper border border-[color:var(--border)] px-3 py-2 font-semibold hover:brightness-110 transition"
+                className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 font-semibold hover:bg-[color:var(--surface)] transition"
                 disabled={!data.sheet_json}
                 onClick={async () => {
                   if (!data.sheet_json) return;
@@ -150,7 +150,7 @@ export default function DetailPage() {
               </button>
             ) : isNpc ? null : (
               <button
-                className="pixel-btn rounded-lg cc-paper border border-[color:var(--border)] px-3 py-2 font-semibold hover:brightness-110 transition"
+                className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 font-semibold hover:bg-[color:var(--surface)] transition"
                 disabled={!data.sheet_json}
                 onClick={async () => {
                   if (!data.sheet_json) return;
@@ -182,7 +182,7 @@ export default function DetailPage() {
             )}
             <Link
               href="/"
-              className="pixel-btn rounded-lg cc-paper border border-[color:var(--border)] px-3 py-2 hover:brightness-110 transition"
+              className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 hover:bg-[color:var(--surface)] transition"
             >
               Back
             </Link>
