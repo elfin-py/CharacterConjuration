@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import NavBar from "./components/NavBar";
+import Footer from "./components/Footer";
 
 type RollMode = "auto" | "standard_array" | "manual" | "point_buy";
 type BuilderType = "character" | "enemy" | "npc";
@@ -95,7 +97,6 @@ const loadingPhrases = [
 export default function HomePage() {
   const router = useRouter();
   const displayEntityType = (value: BuilderType) => (value === "npc" ? "NPC" : value);
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
   // Primary builder selection
   const [builderType, setBuilderType] = useState<BuilderType>("character");
   // Character-only ability inputs
@@ -165,29 +166,6 @@ export default function HomePage() {
     const id = setInterval(ping, 15000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    const stored = typeof window !== "undefined" ? window.localStorage.getItem("cc-theme") : null;
-    if (stored === "light" || stored === "dark") {
-      setTheme(stored);
-      document.documentElement.setAttribute("data-theme", stored);
-    } else {
-      const prefersDark =
-        typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const initial = prefersDark ? "dark" : "light";
-      setTheme(initial);
-      document.documentElement.setAttribute("data-theme", initial);
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("cc-theme", next);
-    }
-    document.documentElement.setAttribute("data-theme", next);
-  };
 
   useEffect(() => {
     if (!loading) {
@@ -374,33 +352,7 @@ export default function HomePage() {
           </div>
         </div>
       )}
-      <header className="sticky top-0 z-20 cc-header cc-paper backdrop-blur px-6 py-4 w-full">
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <div className="flex items-center gap-3">
-            <img
-              src="/logo-text.png"
-              alt="Character Conjuration"
-              className="h-10 w-auto max-w-[240px] object-contain"
-            />
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-1.5 hover:bg-[color:var(--surface)] transition"
-              aria-label="Toggle theme"
-            >
-              <i className={`fa ${theme === "dark" ? "fa-moon-o" : "fa-sun-o"}`} aria-hidden="true" />
-            </button>
-            <button className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-1.5 hover:bg-[color:var(--surface)] transition">
-              Sign in
-            </button>
-            <button className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-1.5 hover:bg-[color:var(--surface)] transition">
-              Log in
-            </button>
-          </div>
-        </div>
-      </header>
+      <NavBar />
 
       <div className="max-w-6xl mx-auto px-6 pb-12 min-h-[calc(100vh-120px)]">
         <section className="mt-8 mb-10 space-y-4 rounded-2xl cc-card cc-vignette p-6">
@@ -822,33 +774,7 @@ export default function HomePage() {
 
       </div>
 
-      <footer className="cc-footer p-6 text-sm cc-ink w-full">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between max-w-6xl mx-auto">
-          <div className="space-y-2">
-            <p className="cc-title text-base font-bold">Character Conjuration</p>
-            <p className="text-sm">
-              A final year undergraduate synoptic project by Poppy Edwards.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-            <a className="underline" href="https://github.com/elfin-py/CharacterConjuration" target="_blank" rel="noreferrer">
-              GitHub repository
-            </a>
-            <a className="underline" href="https://github.com/elfin-py" target="_blank" rel="noreferrer">
-              GitHub profile
-            </a>
-            <a className="underline" href="https://dnd.wizards.com/" target="_blank" rel="noreferrer">
-              Dungeons &amp; Dragons official site
-            </a>
-            <a className="underline" href="https://gdpr.eu/" target="_blank" rel="noreferrer">
-              GDPR overview
-            </a>
-            <a className="underline" href="https://gdpr.eu/what-is-gdpr/" target="_blank" rel="noreferrer">
-              Data protection basics
-            </a>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </main>
   );
 }
