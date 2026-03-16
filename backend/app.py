@@ -10,7 +10,7 @@ import os
 import random
 import json
 import re
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -80,17 +80,34 @@ def chat_with_fallback(messages):
             logger.warning("HF model %s failed: %s", model_name, exc)
     raise last_err or RuntimeError("No HF models available")
 
+
+def retrieve_context(question: str, enabled: bool = True) -> Tuple[str, list[str]]:
+    """Return joined retrieval context and the raw retrieved snippets."""
+    if not enabled:
+        return "", []
+
+    nodes = retriever.retrieve(question)
+    context_parts = []
+    raw_sources = []
+    for i, n in enumerate(nodes, start=1):
+        try:
+            text = n.get_content()
+        except AttributeError:
+            text = getattr(n.node, "text", "")
+        text = (text or "").strip()
+        if not text:
+            continue
+        raw_sources.append(text)
+        context_parts.append(f"--- Source {i} ---\n{text}")
+    return "\n\n".join(context_parts), raw_sources
+
 app = FastAPI()
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
 
 
 class GenerateRequest(BaseModel):
     entity_type: str = "character"          # "character" | "enemy" | "npc"
     roll_mode: str                           # "auto" | "standard_array" | "manual" | "point_buy"
+    experimental_mode: str = "rag"          # "no_rag" | "rag" | "validated_iterative_rag"
     manual_rolls: Optional[List[int]] = None
     ability_assignment: Optional[Dict[str, int]] = None  # {"STR": 15, ...}
     race: Optional[str] = None
@@ -166,82 +183,72 @@ def build_question(req: GenerateRequest) -> str:
     return question
 
 
-@app.post("/generate_character")
-def generate_character(req: GenerateRequest):
-    question = build_question(req)
+def normalize_experimental_mode(mode: str) -> str:
+    value = (mode or "rag").strip().lower()
+    if value not in {"no_rag", "rag", "validated_iterative_rag"}:
+        return "rag"
+    return value
 
-    # Retrieve context from index (may be empty if index failed to load)
-    nodes = retriever.retrieve(question)
-    context_parts = []
-    for i, n in enumerate(nodes, start=1):
-        try:
-            text = n.get_content()
-        except AttributeError:
-            text = getattr(n.node, "text", "")
-        context_parts.append(f"--- Source {i} ---\n{text.strip()}")
 
-    context = "\n\n".join(context_parts)
+def build_messages(question: str, context: str, validation_feedback: Optional[str] = None):
+    system_parts = [
+        "You are a Dungeons and Dragons 5e builder.",
+        "Use only the provided context (PHB and related books) when context is available.",
+        "Always return STRICT JSON only (no markdown, no prose) exactly matching this shape:\n"
+        "{\n"
+        "  \"name\": \"First Last\" (use a believable first+last name appropriate to the chosen race),\n"
+        "  \"race\": \"...\",  // choose based on user input if provided; otherwise pick a fitting race from context\n"
+        "  \"class\": \"...\", // do NOT copy this example; choose a class that fits the request; never default to wizard unless user asked\n"
+        "  \"subclass\": \"...\" (use a suitable subclass to the chosen class),\n"
+        "  \"level\": 5,  // if user did not give a level, pick a sensible one (default around 3)\n"
+        "  \"background\": \"...\", // select a background that appears in the provided context/books; reject placeholders like Unspecified or generic Sage unless explicitly requested\n"
+        "  \"alignment\": \"Chaotic Good\",  // use full words, no abbreviations; honour provided alignment if given\n"
+        "  \"hp\": 32,\n"
+        "  \"ac\": 15,\n"
+        "  \"speed\": 30,\n"
+        "  \"stats\": {\"STR\":8,\"DEX\":14,\"CON\":12,\"INT\":16,\"WIS\":13,\"CHA\":10},\n"
+        "  \"size\": \"Medium\", // size category for the creature (Small/Medium/Large/etc.)\n"
+        "  \"creature_type\": \"humanoid (goblinoid)\", // for enemies/monsters only\n"
+        "  \"challenge_rating\": \"1/2\", // for enemies/monsters only\n"
+        "  \"senses\": \"darkvision 60 ft., passive Perception 10\", // for enemies/monsters only\n"
+        "  \"proficiencies\": [\"Arcana\",\"History\"],\n"
+        "  \"skill_proficiencies\": [\"History\", \"Perception\"], // explicit skill proficiencies by name\n"
+        "  \"saving_throw_proficiencies\": [\"WIS\", \"CHA\"],\n"
+        "  \"weapon_proficiencies\": [\"Simple weapons\", \"Longsword\"],\n"
+        "  \"armor_proficiencies\": [\"Light armor\", \"Medium armor\", \"Shields\"],\n"
+        "  \"languages\": [\"Common\", \"Elvish\"],\n"
+        "  \"features\": [\"Sculpt Spells\",\"Arcane Recovery\"],  // include feats or ASIs here when applicable\n"
+        "  \"equipment\": [\"Quarterstaff\",\"Spellbook\"],\n"
+        "  \"attacks\": [{\"name\":\"Quarterstaff\",\"attack_bonus\":3,\"damage\":\"1d6+1 bludgeoning\"}],\n"
+        "  \"spells\": {\"cantrip\": [\"Fire Bolt\"], \"1\": [\"Shield\",\"Magic Missile\"]},\n"
+        "  \"gender\": \"...\" (male, female, or nonbinary as requested or fitting),\n"
+        "  \"age_group\": \"...\" (young, adult, middle-aged, elder; pick something plausible for race/level),\n"
+        "  \"short_blurb\": \"Write a sizable descriptive paragraph (4-6 sentences). Build on the user's concept if provided, and weave age, race, class, subclass, background, goals, and a memorable detail or flaw.\"\n"
+        "}\n"
+        "- stats must be an object with STR, DEX, CON, INT, WIS, CHA integers (not strings).\n"
+        "- hp, ac, speed, level must be integers (not strings).\n"
+        "- Use a SINGLE class unless the user explicitly requests multiclass; otherwise choose one class/subclass that fits and matches the given race/background/alignment and concept (avoid defaulting to wizard or repeating the example). Never leave example placeholders in the final JSON.\n"
+        "- If level allows feats or ASIs and choices are implied or necessary, add them to the features array (include the feat names or note \"ASI\" with the adjusted scores).\n"
+        "- Prefer backgrounds, languages, spells, and gear found in the provided context/books.\n"
+        "- If entity_type is NPC, still fill the schema with NPC-appropriate class/background. If enemy, use class='enemy', include size/creature_type/challenge_rating/senses, and fill stats similarly.\n"
+        "Respond with JSON only, no commentary.",
+    ]
+    if validation_feedback:
+        system_parts.append(
+            "The previous draft failed validation. Correct the JSON using this feedback and return a fully corrected replacement only:\n"
+            f"{validation_feedback}"
+        )
 
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a Dungeons and Dragons 5e builder. Use only the provided context (PHB and related books). "
-                "Always return STRICT JSON only (no markdown, no prose) exactly matching this shape:\n"
-                "{\n"
-                "  \"name\": \"First Last\" (use a believable first+last name appropriate to the chosen race),\n"
-                "  \"race\": \"...\",  // choose based on user input if provided; otherwise pick a fitting race from context\n"
-                "  \"class\": \"...\", // do NOT copy this example; choose a class that fits the request; never default to wizard unless user asked\n"
-                "  \"subclass\": \"...\" (use a suitable subclass to the chosen class),\n"
-                "  \"level\": 5,  // if user did not give a level, pick a sensible one (default around 3)\n"
-                "  \"background\": \"...\", // select a background that appears in the provided context/books; reject placeholders like Unspecified or generic Sage unless explicitly requested\n"
-                "  \"alignment\": \"Chaotic Good\",  // use full words, no abbreviations; honour provided alignment if given\n"
-                "  \"hp\": 32,\n"
-                "  \"ac\": 15,\n"
-                "  \"speed\": 30,\n"
-                "  \"stats\": {\"STR\":8,\"DEX\":14,\"CON\":12,\"INT\":16,\"WIS\":13,\"CHA\":10},\n"
-                "  \"size\": \"Medium\", // size category for the creature (Small/Medium/Large/etc.)\n"
-                "  \"creature_type\": \"humanoid (goblinoid)\", // for enemies/monsters only\n"
-                "  \"challenge_rating\": \"1/2\", // for enemies/monsters only\n"
-                "  \"senses\": \"darkvision 60 ft., passive Perception 10\", // for enemies/monsters only\n"
-                "  \"proficiencies\": [\"Arcana\",\"History\"],\n"
-                "  \"skill_proficiencies\": [\"History\", \"Perception\"], // explicit skill proficiencies by name\n"
-                "  \"saving_throw_proficiencies\": [\"WIS\", \"CHA\"],\n"
-                "  \"weapon_proficiencies\": [\"Simple weapons\", \"Longsword\"],\n"
-                "  \"armor_proficiencies\": [\"Light armor\", \"Medium armor\", \"Shields\"],\n"
-                "  \"languages\": [\"Common\", \"Elvish\"],\n"
-                "  \"features\": [\"Sculpt Spells\",\"Arcane Recovery\"],  // include feats or ASIs here when applicable\n"
-                "  \"equipment\": [\"Quarterstaff\",\"Spellbook\"],\n"
-                "  \"attacks\": [{\"name\":\"Quarterstaff\",\"attack_bonus\":3,\"damage\":\"1d6+1 bludgeoning\"}],\n"
-                "  \"spells\": {\"cantrip\": [\"Fire Bolt\"], \"1\": [\"Shield\",\"Magic Missile\"]},\n"
-                "  \"gender\": \"...\" (male, female, or nonbinary as requested or fitting),\n"
-                "  \"age_group\": \"...\" (young, adult, middle-aged, elder; pick something plausible for race/level),\n"
-                "  \"short_blurb\": \"Write a sizable descriptive paragraph (4-6 sentences). Build on the user's concept if provided, and weave age, race, class, subclass, background, goals, and a memorable detail or flaw.\"\n"
-                "}\n"
-                "- stats must be an object with STR, DEX, CON, INT, WIS, CHA integers (not strings).\n"
-                "- hp, ac, speed, level must be integers (not strings).\n"
-                "- Use a SINGLE class unless the user explicitly requests multiclass; otherwise choose one class/subclass that fits and matches the given race/background/alignment and concept (avoid defaulting to wizard or repeating the example). Never leave example placeholders in the final JSON.\n"
-                "- If level allows feats or ASIs and choices are implied or necessary, add them to the features array (include the feat names or note \"ASI\" with the adjusted scores).\n"
-                "- Prefer backgrounds, languages, spells, and gear found in the provided context/books.\n"
-                "- If entity_type is NPC, still fill the schema with NPC-appropriate class/background. If enemy, use class='enemy', include size/creature_type/challenge_rating/senses, and fill stats similarly.\n"
-                "Respond with JSON only, no commentary."
-            ),
-        },
+    return [
+        {"role": "system", "content": " ".join(system_parts)},
         {
             "role": "user",
-            "content": f"Context:\n{context}\n\nQuestion: {question}",
+            "content": f"Context:\n{context or '(no retrieved context)'}\n\nQuestion: {question}",
         },
     ]
 
-    try:
-        raw, used_model = chat_with_fallback(messages)
-    except Exception as exc:
-        logger.exception("HF chat_completion failed")
-        raise HTTPException(
-            status_code=502,
-            detail=f"Upstream model error: {exc}. Configure HF_MODEL or HF_MODEL_CANDIDATES with supported chat models.",
-        )
 
+def parse_model_json(raw: str):
     parsed = None
 
     def longest_balanced_prefix(text: str) -> str:
@@ -270,9 +277,7 @@ def generate_character(req: GenerateRequest):
     try:
         parsed = json.loads(raw)
     except Exception:
-        # try to extract first JSON object from the text
         m = re.search(r"\{.*", raw, re.S)
-        parsed = None
         if m:
             candidate = longest_balanced_prefix(m.group(0))
             try:
@@ -280,37 +285,152 @@ def generate_character(req: GenerateRequest):
             except Exception:
                 parsed = None
 
+    if isinstance(parsed, dict):
+        return parsed
+
+    def grab(key, default=None):
+        match = re.search(rf'"{key}"\s*:\s*"([^"]+)"', raw, re.I)
+        return match.group(1) if match else default
+
+    def grab_int(key, default=None):
+        match = re.search(rf'"{key}"\s*:\s*([0-9]+)', raw, re.I)
+        return int(match.group(1)) if match else default
+
+    stats_obj = {}
+    for key in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
+        stats_obj[key] = grab_int(key)
+    return {
+        "name": grab("name"),
+        "race": grab("race"),
+        "class": grab("class"),
+        "subclass": grab("subclass"),
+        "background": grab("background"),
+        "alignment": grab("alignment"),
+        "hp": grab_int("hp"),
+        "ac": grab_int("ac"),
+        "speed": grab_int("speed"),
+        "stats": stats_obj,
+        "proficiencies": [],
+        "features": [],
+        "equipment": [],
+        "short_blurb": grab("short_blurb"),
+        "gender": grab("gender"),
+        "age_group": grab("age_group"),
+    }
+
+
+def collect_validation_issues(parsed: dict, req: GenerateRequest) -> list[str]:
+    issues = []
     if not isinstance(parsed, dict):
-        # fallback: extract key fields with regex even if JSON malformed
-        def grab(key, default=None):
-            m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', raw, re.I)
-            return m.group(1) if m else default
+        return ["response was not a JSON object"]
 
-        def grab_int(key, default=None):
-            m = re.search(rf'"{key}"\s*:\s*([0-9]+)', raw, re.I)
-            return int(m.group(1)) if m else default
+    for field in ["name", "race", "background", "alignment", "short_blurb"]:
+        value = parsed.get(field)
+        if not value or not str(value).strip():
+            issues.append(f"missing {field}")
 
-        stats_obj = {}
-        for k in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
-            stats_obj[k] = grab_int(k)
-        parsed = {
-            "name": grab("name"),
-            "race": grab("race"),
-            "class": grab("class"),
-            "subclass": grab("subclass"),
-            "background": grab("background"),
-            "alignment": grab("alignment"),
-            "hp": grab_int("hp"),
-            "ac": grab_int("ac"),
-            "speed": grab_int("speed"),
-            "stats": stats_obj,
-            "proficiencies": [],
-            "features": [],
-            "equipment": [],
-            "short_blurb": grab("short_blurb"),
-            "gender": grab("gender"),
-            "age_group": grab("age_group"),
-        }
+    level = parsed.get("level") or req.level
+    try:
+        if level is None or int(level) <= 0:
+            issues.append("missing or invalid level")
+    except Exception:
+        issues.append("missing or invalid level")
+
+    stats = parsed.get("stats") or {}
+    if not isinstance(stats, dict):
+        issues.append("stats missing or invalid")
+    else:
+        for ability in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
+            value = stats.get(ability)
+            try:
+                if value is None:
+                    raise ValueError
+                int(value)
+            except Exception:
+                issues.append(f"missing or invalid {ability}")
+
+    placeholders = {"unspecified", "unknown", "n/a", "none"}
+    for field in ["background", "race", "class", "name"]:
+        value = parsed.get(field)
+        if isinstance(value, str) and value.strip().lower() in placeholders:
+            issues.append(f"placeholder {field}")
+
+    if (req.entity_type or "").lower() == "enemy":
+        if not parsed.get("creature_type"):
+            issues.append("enemy missing creature_type")
+        if not parsed.get("challenge_rating"):
+            issues.append("enemy missing challenge_rating")
+
+    if isinstance(parsed.get("short_blurb"), str):
+        sentence_count = len([s for s in re.split(r"[.!?]+", parsed["short_blurb"]) if s.strip()])
+        if sentence_count < 4:
+            issues.append("short_blurb too short")
+
+    return issues
+
+
+def generate_model_output(req: GenerateRequest, question: str):
+    mode = normalize_experimental_mode(req.experimental_mode)
+    use_retrieval = mode != "no_rag"
+    context, retrieved_sources = retrieve_context(question, enabled=use_retrieval)
+
+    attempts = []
+    validation_feedback = None
+    max_attempts = 3 if mode == "validated_iterative_rag" else 1
+    raw = ""
+    used_model = ""
+    parsed = {}
+    validation_issues = []
+
+    for attempt in range(1, max_attempts + 1):
+        messages = build_messages(question, context, validation_feedback=validation_feedback)
+        try:
+            raw, used_model = chat_with_fallback(messages)
+        except Exception as exc:
+            logger.exception("HF chat_completion failed")
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    f"Upstream model error: {exc}. Configure HF_MODEL or HF_MODEL_CANDIDATES "
+                    "with supported chat models."
+                ),
+            )
+
+        parsed = parse_model_json(raw)
+        validation_issues = collect_validation_issues(parsed, req)
+        attempts.append(
+            {
+                "attempt": attempt,
+                "used_model": used_model,
+                "validation_issues": validation_issues,
+            }
+        )
+
+        if mode != "validated_iterative_rag" or not validation_issues:
+            break
+
+        validation_feedback = "; ".join(validation_issues)
+
+    return {
+        "experimental_mode": mode,
+        "context": context,
+        "retrieved_sources": retrieved_sources,
+        "raw": raw,
+        "used_model": used_model,
+        "parsed": parsed,
+        "validation_issues": validation_issues,
+        "attempts": attempts,
+        "attempt_count": len(attempts),
+    }
+
+
+@app.post("/generate_character")
+def generate_character(req: GenerateRequest):
+    question = build_question(req)
+    generation = generate_model_output(req, question)
+    raw = generation["raw"]
+    used_model = generation["used_model"]
+    parsed = generation["parsed"]
 
     # Validate and normalize parsed JSON
     def coerce_int(val):
@@ -733,6 +853,11 @@ def generate_character(req: GenerateRequest):
         "parsed": sheet_json,  # normalized values for UI
         "sheet_json": sheet_json,
         "used_model": used_model,
+        "experimental_mode": generation["experimental_mode"],
+        "validation_issues": generation["validation_issues"],
+        "attempt_count": generation["attempt_count"],
+        "attempts": generation["attempts"],
+        "retrieved_sources": generation["retrieved_sources"],
     }
     if (req.entity_type or "").lower() == "enemy":
         response["stat_block"] = build_stat_block(sheet_json)
@@ -945,6 +1070,7 @@ def health():
     """Simple health check."""
     return {
         "status": "ok",
-        "index_loaded": not isinstance(retriever, type(lambda: None)) and retriever is not None,
-        "model": "HuggingFaceH4/zephyr-7b-beta",
+        "index_loaded": retriever is not None,
+        "model": HF_MODEL_CANDIDATES[0] if HF_MODEL_CANDIDATES else HF_MODEL,
+        "candidate_models": HF_MODEL_CANDIDATES,
     }

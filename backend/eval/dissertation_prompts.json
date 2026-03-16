@@ -1,0 +1,74 @@
+{
+  "character": [
+    {
+      "race": "Elf",
+      "dnd_class": "Wizard",
+      "level": 10,
+      "alignment": "Neutral Good",
+      "concept": "A careful battlefield controller who keeps meticulous notes on every spell interaction and protects younger adventurers like a stern tutor."
+    },
+    {
+      "race": "Dragonborn",
+      "dnd_class": "Paladin",
+      "level": 15,
+      "alignment": "Lawful Good",
+      "concept": "An oathbound knight of a ruined border keep who carries the guilt of failing to save their first squire."
+    },
+    {
+      "race": "Half-Orc",
+      "dnd_class": "Ranger",
+      "level": 3,
+      "alignment": "Neutral",
+      "concept": "A quiet tracker focused on monster hunting, survival skills, and practical gear rather than heroics."
+    },
+    {
+      "race": "Human",
+      "dnd_class": "Sorcerer",
+      "level": 3,
+      "alignment": "Chaotic Good",
+      "concept": "A street performer with unstable magic who wants to entertain crowds but keeps accidentally causing arcane accidents."
+    },
+    {
+      "race": "Dwarf",
+      "dnd_class": "Cleric",
+      "level": 12,
+      "alignment": "Lawful Good",
+      "concept": "A veteran temple healer whose magic is practical, disciplined, and shaped by years of plague relief work."
+    },
+    {
+      "race": "Halfling",
+      "dnd_class": "Rogue",
+      "level": 8,
+      "alignment": "Chaotic Good",
+      "concept": "A nimble infiltrator with a strict moral code, strong social skills, and a habit of leaving mocking calling cards behind."
+    }
+  ],
+  "npc": [
+    {
+      "race": "Human",
+      "alignment": "Neutral",
+      "concept": "A town herbalist whose ledger suggests they are supplying both the local guard and a smuggling ring."
+    },
+    {
+      "race": "Half-Elf",
+      "alignment": "Lawful Good",
+      "concept": "A village teacher pushed into leadership during a crisis, practical and compassionate but clearly exhausted."
+    }
+  ],
+  "enemy": [
+    {
+      "race": "Goblin",
+      "dnd_class": "Sorcerer",
+      "level": 5,
+      "alignment": "Chaotic Evil",
+      "concept": "A goblin fire-mage raider who relies on mobility, reckless spell use, and intimidation."
+    },
+    {
+      "race": "Human",
+      "dnd_class": "Warlock",
+      "level": 7,
+      "alignment": "Lawful Evil",
+      "concept": "A cult enforcer bound to infernal chains, designed to pressure the party with control effects and dark charisma."
+    }
+  ]
+}
