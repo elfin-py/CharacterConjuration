@@ -1,6 +1,8 @@
 backend/venv/
 backend/.env
 backend/__pycache__/
+**/__pycache__/
+*.pyc
 backend/character_index.pkl
 backend/data/pdf/*.pdf
 backend/data/pdf/*.PDF
