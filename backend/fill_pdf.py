@@ -22,7 +22,10 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
 
     field_pages = {}
     for page_index, page in enumerate(reader.pages):
-        for annot_ref in page.get("/Annots", []) or []:
+        annots = page.get("/Annots", [])
+        if hasattr(annots, "get_object"):
+            annots = annots.get_object()
+        for annot_ref in annots or []:
             annot = annot_ref.get_object()
             name = annot.get("/T")
             if name:
