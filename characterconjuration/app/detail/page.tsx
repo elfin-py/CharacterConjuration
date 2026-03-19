@@ -51,6 +51,31 @@ export default function DetailPage() {
   const ac = parsed.ac ?? parsed.armorClass ?? "—";
   const speed = parsed.speed ?? "—";
   const rawJson = data.sheet_json ?? data.parsed ?? data;
+  const hpProvenance = parsed.hit_point_provenance || {};
+  const acProvenance = parsed.armor_class_provenance || {};
+  const hpTooltip =
+    hpProvenance?.source === "deterministic"
+      ? [
+          `Class: ${hpProvenance.class}`,
+          `Hit die: ${hpProvenance.hit_die}`,
+          `Level: ${hpProvenance.level}`,
+          `Con mod: ${hpProvenance.constitution_modifier >= 0 ? "+" : ""}${hpProvenance.constitution_modifier}`,
+          `Level 1 HP: ${hpProvenance.first_level_hp}`,
+          `Levels after 1st: ${hpProvenance.levels_after_first} x ${hpProvenance.average_hp_per_level_after_first}`,
+          `Total: ${hpProvenance.total}`,
+        ].join("\n")
+      : "HP source unavailable";
+  const acTooltip =
+    acProvenance?.source === "deterministic"
+      ? [
+          `Armor source: ${acProvenance.armor}`,
+          `Base AC: ${acProvenance.base_ac}`,
+          `Dex applied: ${acProvenance.dex_modifier_applied >= 0 ? "+" : ""}${acProvenance.dex_modifier_applied}`,
+          `Shield: ${acProvenance.shield_bonus >= 0 ? "+" : ""}${acProvenance.shield_bonus}`,
+          `Notes: ${(acProvenance.notes || []).join(", ") || "none"}`,
+          `Total: ${acProvenance.total}`,
+        ].join("\n")
+      : "AC source unavailable";
 
   return (
     <main className="min-h-screen text-[color:var(--text)] flex flex-col">
@@ -172,7 +197,19 @@ export default function DetailPage() {
                   <li><strong>Alignment:</strong> {parsed.alignment || "—"}</li>
                   <li><strong>Gender:</strong> {parsed.gender || "—"}</li>
                   <li><strong>Age group:</strong> {parsed.age_group || "—"}</li>
-                  <li><strong>HP / AC / Speed:</strong> {hp} / {ac} / {speed} ft</li>
+                  <li>
+                    <strong>HP / AC / Speed:</strong>{" "}
+                    <span className="inline-flex gap-2">
+                      <span className="underline decoration-dotted cursor-help" title={hpTooltip}>
+                        HP {hp}
+                      </span>
+                      <span>/</span>
+                      <span className="underline decoration-dotted cursor-help" title={acTooltip}>
+                        AC {ac}
+                      </span>
+                      <span>/ {speed} ft</span>
+                    </span>
+                  </li>
                 </ul>
               </div>
               {!isNpc && (

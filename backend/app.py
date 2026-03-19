@@ -22,6 +22,27 @@ import pickle
 from io import BytesIO
 from fpdf import FPDF
 from fill_pdf import fill_pdf
+from rules_data import (
+    ABILITIES,
+    BACKGROUND_SKILLS,
+    CLASS_RULES,
+    SKILL_TO_ABILITY,
+    ability_mod,
+    canonical_background_key,
+    canonical_class_key,
+    canonical_race_key,
+    compute_armor_class,
+    compute_hit_points,
+    dedupe,
+    normalize_armor_proficiencies,
+    normalize_skill_name,
+    normalize_skill_proficiencies,
+    normalize_saving_throw_proficiencies,
+    normalize_weapon_proficiencies,
+    prof_bonus,
+    spell_capacity_for_class,
+    validate_spells,
+)
 
 # Logger setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -333,14 +354,19 @@ def collect_validation_issues(parsed: dict, req: GenerateRequest) -> list[str]:
     try:
         if level is None or int(level) <= 0:
             issues.append("missing or invalid level")
+            level_int = 0
+        else:
+            level_int = int(level)
     except Exception:
         issues.append("missing or invalid level")
+        level_int = 0
 
     stats = parsed.get("stats") or {}
     if not isinstance(stats, dict):
         issues.append("stats missing or invalid")
+        stats = {}
     else:
-        for ability in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
+        for ability in ABILITIES:
             value = stats.get(ability)
             try:
                 if value is None:
@@ -366,7 +392,85 @@ def collect_validation_issues(parsed: dict, req: GenerateRequest) -> list[str]:
         if sentence_count < 4:
             issues.append("short_blurb too short")
 
-    return issues
+    class_key = canonical_class_key(parsed.get("class") or req.dnd_class or "")
+    race_key = canonical_race_key(parsed.get("race") or req.race or "")
+    background_text = parsed.get("background") or ""
+
+    normalized_skill_profs, invalid_skill_profs, _ = normalize_skill_proficiencies(
+        parsed.get("skill_proficiencies") or [],
+        class_key,
+        background_text,
+    )
+    if invalid_skill_profs:
+        issues.append(f"invalid skill proficiencies: {', '.join(invalid_skill_profs)}")
+
+    if class_key:
+        expected_count = (CLASS_RULES.get(class_key) or {}).get("skill_count")
+        background_key = canonical_background_key(background_text)
+        background_skills = BACKGROUND_SKILLS.get(background_key, [])
+        if expected_count is not None:
+            max_skills = expected_count + len(background_skills)
+            if len(normalized_skill_profs) > max_skills:
+                issues.append("too many skill proficiencies")
+
+    normalized_save_profs, invalid_save_profs = normalize_saving_throw_proficiencies(
+        parsed.get("saving_throw_proficiencies") or [],
+        class_key,
+    )
+    if invalid_save_profs:
+        issues.append(f"invalid saving throw proficiencies: {', '.join(invalid_save_profs)}")
+    if class_key and normalized_save_profs != sorted((CLASS_RULES.get(class_key) or {}).get("saving_throws") or []):
+        issues.append("saving throw proficiencies do not match class")
+
+    _, invalid_weapon_profs = normalize_weapon_proficiencies(
+        parsed.get("weapon_proficiencies") or [],
+        class_key,
+        race_key,
+    )
+    if invalid_weapon_profs:
+        issues.append(f"invalid weapon proficiencies: {', '.join(map(str, invalid_weapon_profs))}")
+
+    _, invalid_armor_profs = normalize_armor_proficiencies(
+        parsed.get("armor_proficiencies") or [],
+        class_key,
+    )
+    if invalid_armor_profs:
+        issues.append(f"invalid armor proficiencies: {', '.join(map(str, invalid_armor_profs))}")
+
+    if class_key and level_int > 0 and all(ability in stats for ability in ABILITIES):
+        ability_mods = {ability: ability_mod(int(stats[ability])) for ability in ABILITIES}
+        spell_issues, _, capacity = validate_spells(
+            parsed.get("spells") or {},
+            class_key,
+            level_int,
+            ability_mods.get((CLASS_RULES.get(class_key) or {}).get("spellcasting", {}).get("ability", ""), 0),
+        )
+        issues.extend(spell_issues)
+        if capacity["rule"] == "noncaster" and parsed.get("spells"):
+            issues.append("noncaster has spell entries")
+
+        deterministic_hp, _ = compute_hit_points(class_key, level_int, int(stats["CON"]), parsed_hp=parsed.get("hp"))
+        parsed_hp = parsed.get("hp")
+        try:
+            if deterministic_hp is not None and int(parsed_hp) != int(deterministic_hp):
+                issues.append("hit points do not match deterministic class calculation")
+        except Exception:
+            issues.append("missing or invalid hp")
+
+        deterministic_ac, _ = compute_armor_class(
+            class_key,
+            parsed.get("subclass") or "",
+            {k: int(stats[k]) for k in ABILITIES},
+            parsed.get("equipment") or [],
+            parsed_ac=parsed.get("ac"),
+        )
+        try:
+            if int(parsed.get("ac")) != int(deterministic_ac):
+                issues.append("armor class does not match deterministic equipment calculation")
+        except Exception:
+            issues.append("missing or invalid ac")
+
+    return dedupe(issues)
 
 
 def generate_model_output(req: GenerateRequest, question: str):
@@ -502,7 +606,11 @@ def generate_character(req: GenerateRequest):
                 raise HTTPException(status_code=400, detail="Manual assignment must use the provided rolls.")
         stats_norm.update(normalized)
 
-    cls_lower = (parsed.get("class") or "").lower()
+    class_name = parsed.get("class")
+    if isinstance(class_name, str) and ("/" in class_name or "(" in class_name) and "multiclass" not in (question.lower()):
+        class_name = class_name.split("/")[0].split("(")[0].strip()
+    class_key = canonical_class_key(class_name or req.dnd_class or "")
+    cls_lower = class_key or (parsed.get("class") or "").lower()
     # Enforce multiclass ability minimums (PHB)
     class_min = {
         "barbarian": {"STR": 13},
@@ -571,237 +679,83 @@ def generate_character(req: GenerateRequest):
     features = parsed.get("features") or []
     equipment = parsed.get("equipment") or []
 
-    # Derived numbers
-    def mod(score: int) -> int:
-        return (score - 10) // 2
-
-    pb = 2 + (level - 1) // 4
-
-    # AC calculation (simple)
-    def calc_ac():
-        shield_bonus = 2 if any("shield" in item.lower() for item in equipment) else 0
-        armor = [e.lower() for e in equipment if any(x in e.lower() for x in ["armor", "mail", "plate", "leather", "breastplate", "chain shirt", "scale", "hide", "ring mail"])]
-        dex_mod = mod(stats_norm["DEX"])
-        # defaults
-        base = 10 + dex_mod
-        # monk/barbarian unarmored
-        cls = (parsed.get("class") or "").lower()
-        if not armor:
-            if "monk" in cls:
-                base = 10 + dex_mod + mod(stats_norm["WIS"])
-            elif "barbarian" in cls:
-                base = 10 + dex_mod + mod(stats_norm["CON"])
-        # armor types
-        for a in armor:
-            if "studded" in a:
-                base = 12 + dex_mod
-            elif "leather" in a:
-                base = 11 + dex_mod
-            elif "padded" in a:
-                base = 11 + dex_mod
-            elif "hide" in a:
-                base = 12 + min(dex_mod, 2)
-            elif "chain shirt" in a:
-                base = 13 + min(dex_mod, 2)
-            elif "scale" in a:
-                base = 14 + min(dex_mod, 2)
-            elif "breastplate" in a:
-                base = 14 + min(dex_mod, 2)
-            elif "half plate" in a:
-                base = 15 + min(dex_mod, 2)
-            elif "ring mail" in a:
-                base = 14
-            elif "chain mail" in a:
-                base = 16
-            elif "splint" in a:
-                base = 17
-            elif "plate" in a:
-                base = 18
-        return base + shield_bonus
-
-    if ac == 0:
-        ac = calc_ac()
+    pb = prof_bonus(level)
 
     # Skills and saves
-    skill_names = {
-        "acrobatics": "DEX",
-        "animal": "WIS",
-        "athletics": "STR",
-        "deception": "CHA",
-        "history": "INT",
-        "insight": "WIS",
-        "intimidation": "CHA",
-        "investigation": "INT",
-        "nature": "INT",
-        "performance": "CHA",
-        "medicine": "WIS",
-        "religion": "INT",
-        "stealth": "DEX",
-        "persuasion": "CHA",
-        "sleightofhand": "DEX",
-        "survival": "WIS",
-        "perception": "WIS",
-        "arcana": "INT",
-    }
-    def normalize_skill_name(name: str) -> str:
-        key = re.sub(r"[^a-z]", "", name.lower())
-        aliases = {
-            "animalhandling": "animal",
-            "sleightofhand": "sleightofhand",
-        }
-        return aliases.get(key, key)
-
-    def dedupe(seq):
-        seen = set()
-        out = []
-        for item in seq:
-            if item not in seen:
-                seen.add(item)
-                out.append(item)
-        return out
-
     skill_profs = [normalize_skill_name(p) for p in (skill_profs or [])]
     profs_lower = [p.lower() for p in (skill_profs or [])]
 
     def skill_bonus(skill_key: str):
-        abil = skill_names[skill_key]
-        val = mod(stats_norm[abil])
+        abil = SKILL_TO_ABILITY[skill_key]
+        val = ability_mod(stats_norm[abil])
         if any(skill_key in p for p in profs_lower):
             val += pb
         return val
 
-    # If model didn't give skill profs, choose sensible defaults per class/background
-    class_skill_options = {
-        "barbarian": (2, ["animal", "athletics", "intimidation", "nature", "perception", "survival"]),
-        "bard": (3, list(skill_names.keys())),  # any 3
-        "cleric": (2, ["history", "insight", "medicine", "persuasion", "religion"]),
-        "druid": (2, ["arcana", "animal", "insight", "medicine", "nature", "perception", "religion", "survival"]),
-        "fighter": (2, ["acrobatics", "animal", "athletics", "history", "insight", "intimidation", "perception", "survival"]),
-        "monk": (2, ["acrobatics", "athletics", "history", "insight", "religion", "stealth"]),
-        "paladin": (2, ["athletics", "insight", "intimidation", "medicine", "persuasion", "religion"]),
-        "ranger": (3, ["animal", "athletics", "insight", "investigation", "nature", "perception", "stealth", "survival"]),
-        "rogue": (4, ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleightofhand", "stealth"]),
-        "sorcerer": (2, ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"]),
-        "warlock": (2, ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"]),
-        "wizard": (2, ["arcana", "history", "insight", "investigation", "medicine", "religion"]),
-        "artificer": (2, ["arcana", "history", "investigation", "medicine", "nature", "perception", "sleightofhand"]),
-    }
-    background_skill_map = {
-        "acolyte": ["insight", "religion"],
-        "criminal": ["deception", "stealth"],
-        "folk hero": ["animal", "survival"],
-        "noble": ["history", "persuasion"],
-        "sage": ["arcana", "history"],
-        "soldier": ["athletics", "intimidation"],
-        "urchin": ["sleightofhand", "stealth"],
-        "outlander": ["athletics", "survival"],
-        "entertainer": ["acrobatics", "performance"],
-        "guild artisan": ["insight", "persuasion"],
-        "sailor": ["athletics", "perception"],
-        "hermit": ["medicine", "religion"],
-        "city watch": ["athletics", "insight"],
-        "far traveler": ["insight", "perception"],
-    }
-    bg_key = (background or "").lower()
-    bg_skills = background_skill_map.get(bg_key, [])
-
-    cls_skill_count = None
-    cls_skill_opts = None
-    for cls, (n, opts) in class_skill_options.items():
-        if cls in cls_lower:
-            cls_skill_count = n
-            cls_skill_opts = opts
-            break
-
-    if skill_profs:
-        allowed = set(cls_skill_opts or skill_names.keys()) | set(bg_skills)
-        skill_profs = [p for p in skill_profs if p in allowed]
-        skill_profs = dedupe(skill_profs + [s for s in bg_skills if s in allowed])
-    if not skill_profs:
-        picked = list(bg_skills)
-        if cls_skill_opts:
-            remaining = max(0, (cls_skill_count or 0) - len(picked))
-            pool = [s for s in cls_skill_opts if s not in picked]
-            picked += random.sample(pool, min(remaining, len(pool)))
-        skill_profs = dedupe(picked)
+    skill_profs, invalid_skill_profs, background_key = normalize_skill_proficiencies(
+        skill_profs,
+        class_key,
+        background,
+    )
     profs_lower = [p.lower() for p in skill_profs]
 
-    skills = {k: skill_bonus(k) for k in skill_names}
+    skills = {k: skill_bonus(k) for k in SKILL_TO_ABILITY}
     passive_perception = 10 + skills["perception"]
 
-    # Saving throws proficiency by class
-    class_save_profs = {
-        "barbarian": {"STR", "CON"},
-        "bard": {"DEX", "CHA"},
-        "cleric": {"WIS", "CHA"},
-        "druid": {"INT", "WIS"},
-        "fighter": {"STR", "CON"},
-        "monk": {"STR", "DEX"},
-        "paladin": {"WIS", "CHA"},
-        "ranger": {"STR", "DEX"},
-        "rogue": {"DEX", "INT"},
-        "sorcerer": {"CON", "CHA"},
-        "warlock": {"WIS", "CHA"},
-        "wizard": {"INT", "WIS"},
-        "artificer": {"CON", "INT"},
-    }
-    cls_lower = (parsed.get("class") or "").lower()
-    save_profs = set(s.upper() for s in saving_throw_profs) if saving_throw_profs else set()
-    if not save_profs:
-        for cls, saves in class_save_profs.items():
-            if cls in cls_lower:
-                save_profs = saves
-                break
-    saving_throw_profs = list(save_profs)
+    saving_throw_profs, invalid_save_profs = normalize_saving_throw_proficiencies(
+        saving_throw_profs,
+        class_key,
+    )
+    save_profs = set(saving_throw_profs)
     saving_throws = {}
-    for abil in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
-        val = mod(stats_norm[abil])
+    for abil in ABILITIES:
+        val = ability_mod(stats_norm[abil])
         if abil in save_profs:
             val += pb
         saving_throws[abil] = val
 
-    # Spellcasting stats
-    spellcasting_classes = {
-        "bard": "CHA",
-        "cleric": "WIS",
-        "druid": "WIS",
-        "paladin": "CHA",
-        "ranger": "WIS",
-        "sorcerer": "CHA",
-        "warlock": "CHA",
-        "wizard": "INT",
-        "artificer": "INT",
-    }
-    spell_ability = None
-    for cls, abil in spellcasting_classes.items():
-        if cls in cls_lower:
-            spell_ability = abil
-            break
+    race_key = canonical_race_key(race)
+    weapon_profs, invalid_weapon_profs = normalize_weapon_proficiencies(weapon_profs, class_key, race_key)
+    armor_profs, invalid_armor_profs = normalize_armor_proficiencies(armor_profs, class_key)
+
+    spell_ability = ((CLASS_RULES.get(class_key) or {}).get("spellcasting") or {}).get("ability")
     spell_save_dc = None
     spell_attack_bonus = None
     if spell_ability:
-        spell_mod = mod(stats_norm[spell_ability])
+        spell_mod = ability_mod(stats_norm[spell_ability])
         spell_save_dc = 8 + pb + spell_mod
         spell_attack_bonus = pb + spell_mod
-
-    class_name = parsed.get("class")
-    if isinstance(class_name, str) and ("/" in class_name or "(" in class_name) and "multiclass" not in (question.lower()):
-        # force single class by taking first token
-        class_name = class_name.split("/")[0].split("(")[0].strip()
-
-    # Apply saving throw profs from JSON if provided
-    if saving_throw_profs:
-        save_profs = {s.upper() for s in saving_throw_profs}
-        for abil in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
-            val = mod(stats_norm[abil])
-            if abil in save_profs:
-                val += pb
-            saving_throws[abil] = val
 
     size = parsed.get("size")
     if not size:
         small_races = {"gnome", "halfling"}
         size = "Small" if (race or "").lower() in small_races else "Medium"
+
+    hp, hp_provenance = compute_hit_points(class_key, level, stats_norm["CON"], parsed_hp=parsed.get("hp"))
+    ac, ac_provenance = compute_armor_class(
+        class_key,
+        parsed.get("subclass") or "",
+        stats_norm,
+        equipment,
+        parsed_ac=parsed.get("ac"),
+    )
+    spell_issues, normalized_spells, spell_capacity = validate_spells(
+        spells,
+        class_key,
+        level,
+        ability_mod(stats_norm[spell_ability]) if spell_ability else 0,
+    )
+    if normalized_spells:
+        spells = normalized_spells
+
+    post_validation_issues = dedupe(
+        generation["validation_issues"]
+        + [f"invalid skill proficiencies: {', '.join(invalid_skill_profs)}"] * bool(invalid_skill_profs)
+        + [f"invalid saving throw proficiencies: {', '.join(invalid_save_profs)}"] * bool(invalid_save_profs)
+        + [f"invalid weapon proficiencies: {', '.join(map(str, invalid_weapon_profs))}"] * bool(invalid_weapon_profs)
+        + [f"invalid armor proficiencies: {', '.join(map(str, invalid_armor_profs))}"] * bool(invalid_armor_profs)
+        + spell_issues
+    )
 
     sheet_json = {
         "name": parsed.get("name"),
@@ -843,8 +797,11 @@ def generate_character(req: GenerateRequest):
         "spellcasting_ability": spell_ability,
         "spell_save_dc": spell_save_dc,
         "spell_attack_bonus": spell_attack_bonus,
+        "spell_capacity": spell_capacity,
         "attacks": attacks,
         "spells": spells,
+        "hit_point_provenance": hp_provenance,
+        "armor_class_provenance": ac_provenance,
     }
 
     response = {
@@ -854,7 +811,7 @@ def generate_character(req: GenerateRequest):
         "sheet_json": sheet_json,
         "used_model": used_model,
         "experimental_mode": generation["experimental_mode"],
-        "validation_issues": generation["validation_issues"],
+        "validation_issues": post_validation_issues,
         "attempt_count": generation["attempt_count"],
         "attempts": generation["attempts"],
         "retrieved_sources": generation["retrieved_sources"],
