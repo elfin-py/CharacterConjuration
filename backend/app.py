@@ -10,6 +10,9 @@ import os
 import random
 import json
 import re
+import subprocess
+import sys
+from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 
 from fastapi import FastAPI, HTTPException
@@ -123,6 +126,8 @@ def retrieve_context(question: str, enabled: bool = True) -> Tuple[str, list[str
     return "\n\n".join(context_parts), raw_sources
 
 app = FastAPI()
+BACKEND_DIR = Path(__file__).resolve().parent
+EVAL_RESULTS_DIR = BACKEND_DIR / "eval" / "results"
 
 
 class GenerateRequest(BaseModel):
@@ -985,22 +990,17 @@ def fill_sheet(req: SheetRequest):
     if not req.sheet_json:
         raise HTTPException(status_code=400, detail="sheet_json required")
 
-    required_keys = ["name", "class", "level", "race", "background", "alignment", "hitPoints", "armorClass", "speed", "abilities"]
-    missing = [k for k in required_keys if k not in req.sheet_json]
-    if missing:
-        raise HTTPException(status_code=400, detail=f"sheet_json missing fields: {missing}")
-
     try:
-        pdf_bytes = build_pdf(req.sheet_json)
+        pdf_bytes = fill_pdf(req.sheet_json)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"PDF build failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Official PDF build failed: {exc}")
 
     from fastapi.responses import Response
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=character_sheet.pdf"},
+        headers={"Content-Disposition": "attachment; filename=5E_CharacterSheet_Fillable_filled.pdf"},
     )
 
 
@@ -1030,4 +1030,78 @@ def health():
         "index_loaded": retriever is not None,
         "model": HF_MODEL_CANDIDATES[0] if HF_MODEL_CANDIDATES else HF_MODEL,
         "candidate_models": HF_MODEL_CANDIDATES,
+    }
+
+
+def latest_eval_run_dir() -> Optional[Path]:
+    if not EVAL_RESULTS_DIR.exists():
+        return None
+    run_dirs = [path for path in EVAL_RESULTS_DIR.iterdir() if path.is_dir() and path.name.startswith("run_")]
+    if not run_dirs:
+        return None
+    return max(run_dirs, key=lambda path: path.stat().st_mtime)
+
+
+def load_json_if_exists(path: Path):
+    if not path.exists():
+        return None
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+@app.get("/eval/latest")
+def eval_latest():
+    run_dir = latest_eval_run_dir()
+    if run_dir is None:
+        raise HTTPException(status_code=404, detail="No evaluation runs found")
+
+    return {
+        "run_dir": str(run_dir),
+        "run_id": run_dir.name,
+        "summary": load_json_if_exists(run_dir / "summary.json"),
+        "condition_summary": load_json_if_exists(run_dir / "condition_summary.json"),
+        "ragas_summary": load_json_if_exists(run_dir / "ragas_summary.json"),
+        "ragas_per_sample": load_json_if_exists(run_dir / "ragas_per_sample.json"),
+    }
+
+
+@app.post("/eval/run_ragas")
+def run_ragas_eval():
+    run_dir = latest_eval_run_dir()
+    if run_dir is None:
+        raise HTTPException(status_code=404, detail="No evaluation runs found")
+
+    cmd = [
+        sys.executable,
+        str(BACKEND_DIR / "eval" / "ragas_eval.py"),
+        str(run_dir),
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(BACKEND_DIR.parent),
+            capture_output=True,
+            text=True,
+            timeout=900,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(status_code=504, detail=f"RAGAS evaluation timed out: {exc}") from exc
+
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "RAGAS evaluation failed",
+                "stdout": proc.stdout[-4000:],
+                "stderr": proc.stderr[-4000:],
+            },
+        )
+
+    return {
+        "status": "ok",
+        "run_dir": str(run_dir),
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "ragas_summary": load_json_if_exists(run_dir / "ragas_summary.json"),
     }

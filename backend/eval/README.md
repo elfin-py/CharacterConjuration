@@ -16,6 +16,8 @@ The default dissertation run uses `10 prompts x 3 conditions = 30 outputs` with 
 - `backend/eval/prompts.json` - larger prompt pool retained from earlier prototype work
 - `backend/eval/benchmark_run.py` - runs all requested conditions and writes artifacts
 - `backend/eval/summarize_results.py` - computes condition-level score and failure summaries from the scored CSV
+- `backend/eval/dissertation_references.json` - benchmark reference texts for RAGAS-assisted scoring
+- `backend/eval/ragas_eval.py` - converts a saved run into a RAGAS dataset and scores it
 
 ## Output structure
 
@@ -24,6 +26,9 @@ Each run writes:
   - `results.csv`
   - `summary.json`
   - `condition_summary.json` (after running `summarize_results.py`)
+  - `ragas_dataset_preview.json` (after running `ragas_eval.py`)
+  - `ragas_summary.json` (after running `ragas_eval.py`)
+  - `ragas_per_sample.json` (after running `ragas_eval.py`)
   - `{entity}_{NN}_{condition}.json` - request/response artifact
   - `{entity}_{NN}_{condition}_raw.txt` - raw model output
   - `{entity}_{NN}_{condition}_parsed.json` - parsed structured output
@@ -77,6 +82,40 @@ python backend/eval/summarize_results.py backend/eval/results/run_YYYYMMDD_HHMMS
 This writes `condition_summary.json` with:
 - mean/min/max for `sense`, `rules_fit`, and `style` by condition
 - failure counts by condition
+
+## RAGAS-assisted scoring
+
+Install the evaluation-only dependencies if they are not already present:
+
+```bash
+pip install -r backend/requirements-eval.txt
+```
+
+Then run:
+
+```bash
+python backend/eval/ragas_eval.py backend/eval/results/run_YYYYMMDD_HHMMSS
+```
+
+This writes:
+- `ragas_dataset_preview.json`
+- `ragas_summary.json`
+- `ragas_per_sample.json`
+
+Expected environment:
+- `OPENAI_API_KEY` or `RAGAS_OPENAI_API_KEY`
+- optional `RAGAS_EVAL_MODEL` (defaults to `gpt-4o-mini`)
+- optional `RAGAS_EMBED_MODEL` (defaults to `text-embedding-3-small`)
+- optional `RAGAS_OPENAI_BASE_URL` for compatible providers
+
+The implemented RAGAS metrics are:
+- `faithfulness`
+- `answer_relevancy`
+- `context_precision`
+- `context_recall`
+- `answer_correctness`
+
+Use these as retrieval diagnostics. They do not replace the manual `rules_fit` score for D&D legality.
 
 ## Notes for the dissertation
 

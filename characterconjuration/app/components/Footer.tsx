@@ -19,6 +19,9 @@ export default function Footer() {
           <a className="underline" href="https://github.com/elfin-py/CharacterConjuration" target="_blank" rel="noreferrer">
             GitHub repository
           </a>
+          <a className="underline" href="/eval">
+            Evaluation dashboard
+          </a>
           <a className="underline" href="https://github.com/elfin-py" target="_blank" rel="noreferrer">
             GitHub profile
           </a>
