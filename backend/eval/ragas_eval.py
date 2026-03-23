@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+import copy
 import json
+import math
 import os
 from pathlib import Path
 from statistics import mean
 from typing import Any
 
 from ragas import EvaluationDataset, evaluate
-from ragas.embeddings import LangchainEmbeddingsWrapper
-from ragas.llms import LangchainLLMWrapper
-from ragas.metrics.collections import (
-    AnswerCorrectness,
-    AnswerRelevancy,
-    ContextPrecision,
-    ContextRecall,
-    Faithfulness,
+from ragas.embeddings import GoogleEmbeddings, embedding_factory
+from ragas.llms import llm_factory
+from ragas.metrics import (
+    answer_correctness,
+    answer_relevancy,
+    context_precision,
+    context_recall,
+    faithfulness,
 )
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REFERENCES = ROOT / "eval" / "dissertation_references.json"
 DEFAULT_PROMPTS = ROOT / "eval" / "dissertation_prompts.json"
@@ -151,7 +151,7 @@ def build_dataset_rows(run_dir: Path, prompts_path: Path, references_path: Path)
     return samples
 
 
-def build_judge_models() -> tuple[LangchainLLMWrapper, LangchainEmbeddingsWrapper]:
+def build_judge_models():
     provider = (os.getenv("RAGAS_EVAL_PROVIDER") or "").strip().lower()
     google_api_key = (
         os.getenv("RAGAS_GOOGLE_API_KEY")
@@ -161,39 +161,36 @@ def build_judge_models() -> tuple[LangchainLLMWrapper, LangchainEmbeddingsWrappe
     openai_api_key = os.getenv("RAGAS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
     if provider in {"google", "gemini"} or (not provider and google_api_key):
-        try:
-            from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-        except ImportError as exc:
-            raise RuntimeError(
-                "Gemini evaluation requested but langchain-google-genai is not installed."
-            ) from exc
-
         if not google_api_key:
             raise RuntimeError(
                 "Set GOOGLE_API_KEY, GEMINI_API_KEY, or RAGAS_GOOGLE_API_KEY before running Gemini RAGAS evaluation."
             )
 
+        try:
+            from google import genai
+        except ImportError as exc:
+            raise RuntimeError("google-genai is not installed for Gemini-based RAGAS evaluation.") from exc
+
         llm_model = os.getenv("RAGAS_EVAL_MODEL", "gemini-2.0-flash")
-        embedding_model = os.getenv("RAGAS_EMBED_MODEL", "models/text-embedding-004")
-        llm = ChatGoogleGenerativeAI(
-            model=llm_model,
-            temperature=0,
-            google_api_key=google_api_key,
-        )
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model=embedding_model,
-            google_api_key=google_api_key,
-        )
-        return LangchainLLMWrapper(llm), LangchainEmbeddingsWrapper(embeddings)
+        embedding_model = os.getenv("RAGAS_EMBED_MODEL", "gemini-embedding-001")
+        client = genai.Client(api_key=google_api_key)
+        llm = llm_factory(llm_model, provider="google", client=client)
+        embeddings = GoogleEmbeddings(client=client, model=embedding_model)
+        return llm, embeddings
 
     if openai_api_key:
-        base_url = os.getenv("RAGAS_OPENAI_BASE_URL") or None
         llm_model = os.getenv("RAGAS_EVAL_MODEL", "gpt-4o-mini")
         embedding_model = os.getenv("RAGAS_EMBED_MODEL", "text-embedding-3-small")
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError("openai package is required for OpenAI-based RAGAS evaluation.") from exc
 
-        llm = ChatOpenAI(model=llm_model, temperature=0, api_key=openai_api_key, base_url=base_url)
-        embeddings = OpenAIEmbeddings(model=embedding_model, api_key=openai_api_key, base_url=base_url)
-        return LangchainLLMWrapper(llm), LangchainEmbeddingsWrapper(embeddings)
+        base_url = os.getenv("RAGAS_OPENAI_BASE_URL") or None
+        client = OpenAI(api_key=openai_api_key, base_url=base_url)
+        llm = llm_factory(llm_model, provider="openai", client=client)
+        embeddings = embedding_factory("openai", model=embedding_model, client=client)
+        return llm, embeddings
 
     raise RuntimeError(
         "Set GOOGLE_API_KEY/GEMINI_API_KEY (preferred) or OPENAI_API_KEY before running RAGAS evaluation."
@@ -203,12 +200,17 @@ def build_judge_models() -> tuple[LangchainLLMWrapper, LangchainEmbeddingsWrappe
 def evaluate_samples(samples: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     llm, embeddings = build_judge_models()
     metrics = [
-        Faithfulness(llm=llm),
-        AnswerRelevancy(llm=llm, embeddings=embeddings),
-        ContextPrecision(llm=llm),
-        ContextRecall(llm=llm),
-        AnswerCorrectness(llm=llm, embeddings=embeddings),
+        copy.deepcopy(faithfulness),
+        copy.deepcopy(answer_relevancy),
+        copy.deepcopy(context_precision),
+        copy.deepcopy(context_recall),
+        copy.deepcopy(answer_correctness),
     ]
+    for metric in metrics:
+        if hasattr(metric, "llm"):
+            metric.llm = llm
+        if hasattr(metric, "embeddings"):
+            metric.embeddings = embeddings
     dataset = EvaluationDataset.from_list(samples)
     result = evaluate(dataset=dataset, metrics=metrics, raise_exceptions=False, show_progress=True)
     frame = result.to_pandas()
@@ -221,7 +223,7 @@ def evaluate_samples(samples: list[dict[str, Any]]) -> tuple[list[dict[str, Any]
         bucket = by_condition.setdefault(condition, {key: [] for key in metric_keys})
         for key in metric_keys:
             value = scored.get(key)
-            if isinstance(value, (int, float)):
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
                 bucket[key].append(float(value))
 
     summary_by_condition = {}
@@ -237,7 +239,11 @@ def evaluate_samples(samples: list[dict[str, Any]]) -> tuple[list[dict[str, Any]
 
     overall = {}
     for key in metric_keys:
-        values = [float(row[key]) for row in per_sample if isinstance(row.get(key), (int, float))]
+        values = [
+            float(row[key])
+            for row in per_sample
+            if isinstance(row.get(key), (int, float)) and math.isfinite(float(row[key]))
+        ]
         overall[key] = {
             "mean": round(mean(values), 4) if values else None,
             "min": round(min(values), 4) if values else None,
@@ -245,12 +251,21 @@ def evaluate_samples(samples: list[dict[str, Any]]) -> tuple[list[dict[str, Any]
             "n": len(values),
         }
 
+    invalid_counts = {}
+    for key in metric_keys:
+        invalid_counts[key] = sum(
+            1
+            for row in per_sample
+            if not (isinstance(row.get(key), (int, float)) and math.isfinite(float(row.get(key))))
+        )
+
     summary = {
         "status": "ok",
         "metric_names": metric_keys,
         "sample_count": len(samples),
         "overall": overall,
         "by_condition": summary_by_condition,
+        "invalid_counts": invalid_counts,
         "notes": [
             "RAGAS metrics complement but do not replace the manual rules-fit rubric.",
             "Answer correctness uses benchmark reference texts rather than full gold-standard sheets.",
