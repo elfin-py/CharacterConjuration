@@ -24,6 +24,31 @@ DEFAULT_REFERENCES = ROOT / "eval" / "dissertation_references.json"
 DEFAULT_PROMPTS = ROOT / "eval" / "dissertation_prompts.json"
 
 
+class GoogleEmbeddingsCompat:
+    """Bridge RAGAS' mixed embedding interfaces for Gemini embeddings."""
+
+    def __init__(self, inner: GoogleEmbeddings):
+        self.inner = inner
+
+    async def embed_text(self, text: str):
+        return await self.inner.aembed_text(text)
+
+    async def embed_texts(self, texts: list[str]):
+        return await self.inner.aembed_texts(texts)
+
+    async def aembed_text(self, text: str):
+        return await self.inner.aembed_text(text)
+
+    async def aembed_documents(self, texts: list[str]):
+        return await self.inner.aembed_texts(texts)
+
+    def embed_query(self, text: str):
+        return self.inner.embed_text(text)
+
+    def embed_documents(self, texts: list[str]):
+        return self.inner.embed_texts(texts)
+
+
 def load_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
@@ -171,11 +196,11 @@ def build_judge_models():
         except ImportError as exc:
             raise RuntimeError("google-genai is not installed for Gemini-based RAGAS evaluation.") from exc
 
-        llm_model = os.getenv("RAGAS_EVAL_MODEL", "gemini-2.0-flash")
+        llm_model = os.getenv("RAGAS_EVAL_MODEL", "gemini-2.5-flash")
         embedding_model = os.getenv("RAGAS_EMBED_MODEL", "gemini-embedding-001")
         client = genai.Client(api_key=google_api_key)
         llm = llm_factory(llm_model, provider="google", client=client)
-        embeddings = GoogleEmbeddings(client=client, model=embedding_model)
+        embeddings = GoogleEmbeddingsCompat(GoogleEmbeddings(client=client, model=embedding_model))
         return llm, embeddings
 
     if openai_api_key:
@@ -211,6 +236,8 @@ def evaluate_samples(samples: list[dict[str, Any]]) -> tuple[list[dict[str, Any]
             metric.llm = llm
         if hasattr(metric, "embeddings"):
             metric.embeddings = embeddings
+        if hasattr(metric, "strictness"):
+            metric.strictness = 1
     dataset = EvaluationDataset.from_list(samples)
     result = evaluate(dataset=dataset, metrics=metrics, raise_exceptions=False, show_progress=True)
     frame = result.to_pandas()

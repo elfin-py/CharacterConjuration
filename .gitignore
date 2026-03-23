@@ -13,3 +13,5 @@ backend/data/pdf_to_md.py
 
 characterconjuration/node_modules/
 characterconjuration/.next/
+characterconjuration/.next.stale.*/
+backend/eval/results/

@@ -111,7 +111,7 @@ Expected environment:
 - optional `RAGAS_OPENAI_BASE_URL` for compatible OpenAI-style providers
 
 Default evaluator models:
-- Gemini: `gemini-2.0-flash` + `gemini-embedding-001`
+- Gemini: `gemini-2.5-flash` + `gemini-embedding-001`
 - OpenAI: `gpt-4o-mini` + `text-embedding-3-small`
 
 The implemented RAGAS metrics are:
