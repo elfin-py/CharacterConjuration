@@ -152,17 +152,52 @@ def build_dataset_rows(run_dir: Path, prompts_path: Path, references_path: Path)
 
 
 def build_judge_models() -> tuple[LangchainLLMWrapper, LangchainEmbeddingsWrapper]:
-    api_key = os.getenv("RAGAS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("Set OPENAI_API_KEY or RAGAS_OPENAI_API_KEY before running RAGAS evaluation.")
+    provider = (os.getenv("RAGAS_EVAL_PROVIDER") or "").strip().lower()
+    google_api_key = (
+        os.getenv("RAGAS_GOOGLE_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("GOOGLE_API_KEY")
+    )
+    openai_api_key = os.getenv("RAGAS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
-    base_url = os.getenv("RAGAS_OPENAI_BASE_URL") or None
-    llm_model = os.getenv("RAGAS_EVAL_MODEL", "gpt-4o-mini")
-    embedding_model = os.getenv("RAGAS_EMBED_MODEL", "text-embedding-3-small")
+    if provider in {"google", "gemini"} or (not provider and google_api_key):
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+        except ImportError as exc:
+            raise RuntimeError(
+                "Gemini evaluation requested but langchain-google-genai is not installed."
+            ) from exc
 
-    llm = ChatOpenAI(model=llm_model, temperature=0, api_key=api_key, base_url=base_url)
-    embeddings = OpenAIEmbeddings(model=embedding_model, api_key=api_key, base_url=base_url)
-    return LangchainLLMWrapper(llm), LangchainEmbeddingsWrapper(embeddings)
+        if not google_api_key:
+            raise RuntimeError(
+                "Set GOOGLE_API_KEY, GEMINI_API_KEY, or RAGAS_GOOGLE_API_KEY before running Gemini RAGAS evaluation."
+            )
+
+        llm_model = os.getenv("RAGAS_EVAL_MODEL", "gemini-2.0-flash")
+        embedding_model = os.getenv("RAGAS_EMBED_MODEL", "models/text-embedding-004")
+        llm = ChatGoogleGenerativeAI(
+            model=llm_model,
+            temperature=0,
+            google_api_key=google_api_key,
+        )
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model=embedding_model,
+            google_api_key=google_api_key,
+        )
+        return LangchainLLMWrapper(llm), LangchainEmbeddingsWrapper(embeddings)
+
+    if openai_api_key:
+        base_url = os.getenv("RAGAS_OPENAI_BASE_URL") or None
+        llm_model = os.getenv("RAGAS_EVAL_MODEL", "gpt-4o-mini")
+        embedding_model = os.getenv("RAGAS_EMBED_MODEL", "text-embedding-3-small")
+
+        llm = ChatOpenAI(model=llm_model, temperature=0, api_key=openai_api_key, base_url=base_url)
+        embeddings = OpenAIEmbeddings(model=embedding_model, api_key=openai_api_key, base_url=base_url)
+        return LangchainLLMWrapper(llm), LangchainEmbeddingsWrapper(embeddings)
+
+    raise RuntimeError(
+        "Set GOOGLE_API_KEY/GEMINI_API_KEY (preferred) or OPENAI_API_KEY before running RAGAS evaluation."
+    )
 
 
 def evaluate_samples(samples: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:

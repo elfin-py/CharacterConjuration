@@ -15,7 +15,7 @@ The RAGAS metrics selected for this project are:
     \item \textbf{Answer correctness:} whether the generated response matches the benchmark reference description.
 \end{itemize}
 
-These metrics are used only as a complement to the dissertation's manual rubric. This limitation is important. RAGAS can indicate whether retrieved evidence appears relevant and whether a response is broadly aligned with a reference answer, but it does not directly guarantee D\&D 5e legality. A response may still score reasonably on relevancy while violating spell progression, proficiency constraints, or derived-stat rules. For that reason, the project retains manual \textit{Rules fit} scoring and deterministic validation as the primary measures of mechanical correctness.
+These metrics are used only as a complement to the dissertation's manual rubric. This limitation is important. RAGAS can indicate whether retrieved evidence appears relevant and whether a response is broadly aligned with a reference answer, but it does not directly guarantee D\&D 5e legality. A response may still score reasonably on relevancy while violating spell progression, proficiency constraints, or derived-stat rules. For that reason, the project retains manual \textit{Rules fit} scoring and deterministic validation as the primary measures of mechanical correctness. In the implemented evaluation workflow, the RAGAS judge model is configured separately from the generation model so that retrieval diagnostics can be run with an external evaluator without changing the generation pipeline itself.
 
 \subsection{How RAGAS Is Used in the Comparative Study}
 

@@ -103,10 +103,16 @@ This writes:
 - `ragas_per_sample.json`
 
 Expected environment:
-- `OPENAI_API_KEY` or `RAGAS_OPENAI_API_KEY`
-- optional `RAGAS_EVAL_MODEL` (defaults to `gpt-4o-mini`)
-- optional `RAGAS_EMBED_MODEL` (defaults to `text-embedding-3-small`)
-- optional `RAGAS_OPENAI_BASE_URL` for compatible providers
+- preferred: `GOOGLE_API_KEY`, `GEMINI_API_KEY`, or `RAGAS_GOOGLE_API_KEY`
+- fallback: `OPENAI_API_KEY` or `RAGAS_OPENAI_API_KEY`
+- optional `RAGAS_EVAL_PROVIDER` (`google` / `gemini` / `openai`)
+- optional `RAGAS_EVAL_MODEL`
+- optional `RAGAS_EMBED_MODEL`
+- optional `RAGAS_OPENAI_BASE_URL` for compatible OpenAI-style providers
+
+Default evaluator models:
+- Gemini: `gemini-2.0-flash` + `models/text-embedding-004`
+- OpenAI: `gpt-4o-mini` + `text-embedding-3-small`
 
 The implemented RAGAS metrics are:
 - `faithfulness`
