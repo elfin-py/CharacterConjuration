@@ -4,10 +4,12 @@ Fill the official 5E character sheet PDF using page-aware field mapping.
 
 from typing import Any, Dict
 from pathlib import Path
+import re
 
 from PyPDF2 import PdfReader, PdfWriter
+from PyPDF2.generic import NameObject
 
-from rules_data import ABILITIES, SKILL_TO_ABILITY, ability_mod, prof_bonus
+from rules_data import ABILITIES, CLASS_RULES, SKILL_TO_ABILITY, ability_mod, canonical_class_key, prof_bonus
 
 PDF_TEMPLATE = Path(__file__).resolve().parent / "data" / "pdf" / "5E_CharacterSheet_Fillable.pdf"
 
@@ -21,7 +23,8 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
     writer.clone_document_from_reader(reader)
 
     field_pages = {}
-    for page_index, page in enumerate(reader.pages):
+    field_annots = {}
+    for page_index, page in enumerate(writer.pages):
         annots = page.get("/Annots", [])
         if hasattr(annots, "get_object"):
             annots = annots.get_object()
@@ -30,6 +33,7 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
             name = annot.get("/T")
             if name:
                 field_pages.setdefault(str(name), []).append(page_index)
+                field_annots.setdefault(str(name), []).append(annot)
 
     def page_indices(name: str):
         return field_pages.get(name, [])
@@ -41,12 +45,75 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
                 {name: str(value) if value is not None else ""},
             )
 
+    def spell_field_sections():
+        spell_fields = []
+        for name, annots in field_annots.items():
+            if not str(name).startswith("Spells "):
+                continue
+            annot = annots[0]
+            rect = annot.get("/Rect")
+            if rect:
+                spell_fields.append((str(name), float(rect[0]), float(rect[1])))
+
+        cols = {}
+        for name, x, y in spell_fields:
+            cols.setdefault(round(x), []).append((y, name))
+
+        left_top = [name for y, name in sorted(cols.get(40, []), reverse=True)]
+        left_all = [name for y, name in sorted(cols.get(41, []), reverse=True)]
+        mid_all = [name for y, name in sorted(cols.get(230, []), reverse=True)]
+        right_all = [name for y, name in sorted(cols.get(417, []), reverse=True)]
+
+        return {
+            "cantrip": left_top,
+            "1": left_all[:12],
+            "2": left_all[12:],
+            "3": mid_all[:13],
+            "4": mid_all[13:26],
+            "5": mid_all[26:],
+            "6": right_all[:9],
+            "7": right_all[9:18],
+            "8": right_all[18:25],
+            "9": right_all[25:],
+        }
+
+    def spell_checkbox_sections():
+        checkbox_fields = []
+        for name, annots in field_annots.items():
+            if not str(name).startswith("Check Box"):
+                continue
+            annot = annots[0]
+            rect = annot.get("/Rect")
+            if rect and float(rect[0]) < 450 and float(rect[1]) < 430:
+                checkbox_fields.append((str(name), float(rect[0]), float(rect[1])))
+
+        cols = {}
+        for name, x, y in checkbox_fields:
+            cols.setdefault(round(x), []).append((y, name))
+
+        left_all = [name for y, name in sorted(cols.get(32, []), reverse=True)]
+        mid_all = [name for y, name in sorted(cols.get(221, []), reverse=True)]
+        right_all = [name for y, name in sorted(cols.get(409, []), reverse=True)]
+
+        return {
+            "1": left_all[:12],
+            "2": left_all[12:],
+            "3": mid_all[:13],
+            "4": mid_all[13:26],
+            "5": mid_all[26:],
+            "6": right_all[:9],
+            "7": right_all[9:18],
+            "8": right_all[18:25],
+            "9": right_all[25:],
+        }
+
     def check_box(name: str, on: bool):
-        for page_index in page_indices(name):
-            writer.update_page_form_field_values(
-                writer.pages[page_index],
-                {name: "Yes" if on else "Off"},
-            )
+        state = NameObject("/Yes" if on else "/Off")
+        for annot in field_annots.get(name, []):
+            annot.update({
+                NameObject("/V"): state,
+                NameObject("/AS"): state,
+            })
 
     def score_mod(score: Any) -> str:
         try:
@@ -63,18 +130,31 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
     if sheet_json.get("level"):
         class_level += f" {sheet_json.get('level')}"
 
-    all_proficiencies = []
-    for group in [
-        sheet_json.get("proficiencies") or [],
-        sheet_json.get("skill_proficiencies") or [],
-        sheet_json.get("saving_throw_proficiencies") or [],
-        sheet_json.get("weapon_proficiencies") or [],
-        sheet_json.get("armor_proficiencies") or [],
-        sheet_json.get("languages") or [],
-    ]:
-        for item in group:
-            if item not in all_proficiencies:
-                all_proficiencies.append(item)
+    def dedupe(items):
+        out = []
+        seen = set()
+        for item in items:
+            text = str(item).strip()
+            key = text.lower()
+            if text and key not in seen:
+                seen.add(key)
+                out.append(text)
+        return out
+
+    weapon_profs = dedupe(sheet_json.get("weapon_proficiencies") or [])
+    armor_profs = dedupe(sheet_json.get("armor_proficiencies") or [])
+    misc_profs = dedupe(sheet_json.get("proficiencies") or [])
+    languages = dedupe(sheet_json.get("languages") or [])
+
+    prof_lines = []
+    if armor_profs:
+        prof_lines.append(f"Armor: {', '.join(armor_profs)}")
+    if weapon_profs:
+        prof_lines.append(f"Weapons: {', '.join(weapon_profs)}")
+    if misc_profs:
+        prof_lines.append(f"Other: {', '.join(misc_profs)}")
+    if languages:
+        prof_lines.append(f"Languages: {', '.join(languages)}")
 
     set_field("CharacterName", sheet_json.get("name", ""))
     set_field("CharacterName 2", sheet_json.get("name", ""))
@@ -100,14 +180,20 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
     set_field("Speed", sheet_json.get("speed", ""))
     set_field("Initiative", score_mod(abilities.get("dex")))
     set_field("ProfBonus", f"+{prof_bonus(int(sheet_json.get('level') or 1))}")
+    class_key = canonical_class_key(sheet_json.get("class", ""))
+    hit_die = (CLASS_RULES.get(class_key) or {}).get("hit_die")
+    level = sheet_json.get("level") or ""
+    if hit_die and level:
+        set_field("HDTotal", level)
+        set_field("HD", f"d{hit_die}")
 
     save_check_map = {
-        "STR": "Check Box 12",
-        "DEX": "Check Box 13",
-        "CON": "Check Box 14",
-        "INT": "Check Box 15",
-        "WIS": "Check Box 16",
-        "CHA": "Check Box 17",
+        "STR": "Check Box 11",
+        "DEX": "Check Box 18",
+        "CON": "Check Box 19",
+        "INT": "Check Box 20",
+        "WIS": "Check Box 21",
+        "CHA": "Check Box 22",
     }
     saves = sheet_json.get("saving_throws") or {}
     for ability in ABILITIES:
@@ -132,29 +218,53 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
         "insight",
         "intimidation",
         "investigation",
-        "nature",
-        "performance",
         "medicine",
-        "religion",
-        "stealth",
-        "persuasion",
-        "sleightofhand",
-        "survival",
+        "nature",
         "perception",
+        "performance",
+        "persuasion",
+        "religion",
+        "sleightofhand",
+        "stealth",
+        "survival",
     ]
-    skill_check_map = {name: f"Check Box {18+i}" for i, name in enumerate(skill_check_order)}
+    skill_check_map = {name: f"Check Box {23+i}" for i, name in enumerate(skill_check_order)}
+    skill_value_field_map = {
+        "acrobatics": "Acrobatics",
+        "animal": "Animal",
+        "arcana": "Arcana",
+        "athletics": "Athletics",
+        "deception": "Deception ",
+        "history": "History ",
+        "insight": "Insight",
+        "intimidation": "Intimidation",
+        "investigation": "Investigation ",
+        "medicine": "Medicine",
+        "nature": "Nature",
+        "perception": "Perception ",
+        "performance": "Performance",
+        "persuasion": "Persuasion",
+        "religion": "Religion",
+        "sleightofhand": "SleightofHand",
+        "stealth": "Stealth ",
+        "survival": "Survival",
+    }
     skills = sheet_json.get("skills") or {}
-    skill_prof_set = {str(value).lower() for value in (sheet_json.get("skill_proficiencies") or [])}
+    skill_prof_set = {str(value).strip().lower() for value in (sheet_json.get("skill_proficiencies") or [])}
     for skill_name in SKILL_TO_ABILITY:
-        field_name = skill_name if skill_name != "perception" else "Perception "
+        field_name = skill_value_field_map[skill_name]
         set_field(field_name, skills.get(skill_name, ""))
         check_box(skill_check_map[skill_name], skill_name in skill_prof_set)
 
     set_field("Passive", sheet_json.get("passive_perception", ""))
-    set_field("ProficienciesLang", "\n".join(all_proficiencies))
-    set_field("Features and Traits", "\n".join(sheet_json.get("features", []) or []))
+    set_field("ProficienciesLang", "\n".join(prof_lines))
+    feature_lines = list(sheet_json.get("features", []) or [])
+    senses_text = str(sheet_json.get("senses") or "").strip()
+    senses_text = re.sub(r",?\s*passive perception\s+\d+", "", senses_text, flags=re.IGNORECASE).strip(" ,")
+    if senses_text:
+        feature_lines.append(f"Senses: {senses_text}")
+    set_field("Features and Traits", "\n".join(feature_lines))
     set_field("Equipment", "\n".join(sheet_json.get("equipment", []) or []))
-    set_field("Other Proficiencies", "\n".join(all_proficiencies))
     set_field("Backstory", sheet_json.get("notes", ""))
 
     attacks = sheet_json.get("attacks") or []
@@ -183,10 +293,21 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
         set_field("Feat+Traits", "\n".join(spell_lines))
 
     if sheet_json.get("spellcasting_ability"):
-        set_field("Spellcasting Class", class_name)
-        set_field("Spellcasting Ability", sheet_json.get("spellcasting_ability"))
-        set_field("Spell Save DC", sheet_json.get("spell_save_dc", ""))
-        set_field("Spell Attack Bonus", f"+{sheet_json.get('spell_attack_bonus')}" if sheet_json.get("spell_attack_bonus") is not None else "")
+        set_field("Spellcasting Class 2", class_name)
+        set_field("SpellcastingAbility 2", sheet_json.get("spellcasting_ability"))
+        set_field("SpellSaveDC  2", sheet_json.get("spell_save_dc", ""))
+        set_field("SpellAtkBonus 2", f"+{sheet_json.get('spell_attack_bonus')}" if sheet_json.get("spell_attack_bonus") is not None else "")
+
+        sections = spell_field_sections()
+        checkbox_sections = spell_checkbox_sections()
+        prepared_rule = ((sheet_json.get("spell_capacity") or {}).get("rule") or "").startswith("prepared")
+        for bucket, field_names in sections.items():
+            names = (sheet_json.get("spells") or {}).get(bucket) or []
+            for field_name, spell_name in zip(field_names, names):
+                set_field(field_name, spell_name)
+            if prepared_rule and bucket in checkbox_sections:
+                for checkbox_name in checkbox_sections[bucket][: len(names)]:
+                    check_box(checkbox_name, True)
 
     set_field("PersonalityTraits ", sheet_json.get("notes", ""))
     set_field("Ideals", sheet_json.get("alignment", ""))

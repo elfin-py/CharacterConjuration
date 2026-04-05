@@ -1,4 +1,5 @@
 import re
+import random
 from functools import lru_cache
 from pathlib import Path
 
@@ -227,6 +228,158 @@ RACE_EXTRA_WEAPON_PROFS = {
     "wood elf": {"longsword", "shortsword", "shortbow", "longbow"},
 }
 
+RACE_DEFAULT_FEATURES = {
+    "half-elf": ["Darkvision", "Fey Ancestry"],
+}
+
+RACE_DEFAULT_SENSES = {
+    "half-elf": "darkvision 60 ft.",
+}
+
+NAME_PARTS = {
+    "human": {
+        "first": ["Alden", "Mira", "Kaelan", "Seren", "Tavian", "Lyra", "Rowan", "Cassian", "Elira", "Darian", "Iris", "Nadia"],
+        "last": ["Morrow", "Vale", "Ashdown", "Hawke", "Fenmere", "Blackwater", "Marlowe", "Stone", "Reeve", "Thorne", "Voss", "Weatherby"],
+    },
+    "elf": {
+        "first": ["Aelar", "Sylvaris", "Lethira", "Faelar", "Ilyrana", "Vaeril", "Thamior", "Naivara", "Eryndor", "Shalana", "Myriil", "Caelynn"],
+        "last": ["Amakiir", "Galanodel", "Holimion", "Liadon", "Xiloscient", "Ilphelkiir", "Nailo", "Siannodel", "Meliamne", "Yrthraethra"],
+    },
+    "half-elf": {
+        "first": ["Kaelis", "Liora", "Theren", "Anwyn", "Rylan", "Selenne", "Corin", "Elaria", "Marek", "Nyra", "Tallis", "Virel"],
+        "last": ["Moonbrook", "Evenwood", "Dawnmere", "Ashvale", "Riversong", "Glenhaven", "Stormwillow", "Thornmere", "Silverfen", "Valecrest"],
+    },
+    "dwarf": {
+        "first": ["Bruen", "Dagna", "Torin", "Helja", "Orsik", "Vistra", "Rurik", "Sannl", "Baern", "Kathra"],
+        "last": ["Ironfist", "Graniteheart", "Battlehammer", "Stonevein", "Deepdelver", "Forgeborn", "Anvilhand", "Goldfinder"],
+    },
+    "halfling": {
+        "first": ["Perrin", "Marigold", "Roscoe", "Tessa", "Bramble", "Cora", "Milo", "Lavinia", "Nedda", "Tobin"],
+        "last": ["Brushgather", "Underbough", "Tealeaf", "Goodbarrel", "Highhill", "Hilltopple", "Greenbottle", "Softstep"],
+    },
+    "gnome": {
+        "first": ["Nib", "Bimpnottin", "Ellyjoy", "Fonkin", "Loopmottin", "Tana", "Wrenn", "Fizzwick", "Boddynock", "Zanna"],
+        "last": ["Nackle", "Murnig", "Turen", "Ningel", "Daergel", "Scheppen", "Timbers", "Folkor"],
+    },
+    "dragonborn": {
+        "first": ["Arjhan", "Balasar", "Donaar", "Kriv", "Medrash", "Nadarr", "Rhogar", "Torinn", "Akra", "Kava"],
+        "last": ["Clethtinthiallor", "Daardendrian", "Delmirev", "Kepeshkmolik", "Myastan", "Turnuroth", "Verthisathurgiesh"],
+    },
+    "tiefling": {
+        "first": ["Akmenos", "Orianna", "Leucis", "Nyx", "Morthos", "Seraphine", "Kallista", "Zevran", "Riven", "Asha"],
+        "last": ["Nightbrand", "Vexley", "Embermoor", "Duskwell", "Hellscar", "Ashthorn", "Blackflame", "Mireveil"],
+    },
+    "half-orc": {
+        "first": ["Grom", "Shara", "Dorn", "Urga", "Mugra", "Ront", "Baggi", "Thokk", "Ovak", "Keth"],
+        "last": ["Skullcleaver", "Stonejaw", "Redfang", "Ironhide", "Goreborn", "Blacktusk", "Ashscar", "Bonebreaker"],
+    },
+    "orc": {
+        "first": ["Hruk", "Yagra", "Morg", "Shump", "Zog", "Thura", "Brakka", "Drenk"],
+        "last": ["Skullsplitter", "Bloodtusk", "Grimmaw", "Ironscar", "Rotfang", "Warcaller"],
+    },
+    "goblin": {
+        "first": ["Skrik", "Nix", "Boggle", "Razzik", "Tikka", "Grib", "Sniv", "Mogget"],
+        "last": ["Ratchet", "Sootnose", "Quickshiv", "Mudsnare", "Cracktooth", "Bogsnip"],
+    },
+    "default": {
+        "first": ["Kael", "Lira", "Toren", "Nyra", "Ari", "Sel", "Corin", "Maeve", "Darian", "Veya"],
+        "last": ["Ashfall", "Mournwood", "Vale", "Thorn", "Duskryn", "Wintermere", "Blackbriar", "Starseer"],
+    },
+}
+
+SUBCLASS_SPELLCASTING = {
+    ("rogue", "arcane trickster"): {
+        "type": "third_known",
+        "ability": "INT",
+        "forced_cantrips": ["Mage Hand"],
+        "source_class": "wizard",
+    },
+    ("fighter", "eldritch knight"): {
+        "type": "third_known",
+        "ability": "INT",
+        "forced_cantrips": [],
+        "source_class": "wizard",
+    },
+}
+
+SUBCLASS_DEFAULT_SPELLS = {
+    ("rogue", "arcane trickster"): {
+        "cantrip": ["Mage Hand", "Minor Illusion", "Prestidigitation"],
+        "1": ["Charm Person", "Disguise Self", "Silent Image", "Shield"],
+    },
+    ("fighter", "eldritch knight"): {
+        "cantrip": ["Fire Bolt", "Mage Hand"],
+        "1": ["Shield", "Magic Missile", "Protection from Evil and Good"],
+    },
+}
+
+CLASS_DEFAULT_SPELLS = {
+    "bard": {
+        "cantrip": ["Vicious Mockery", "Prestidigitation", "Mage Hand", "Minor Illusion"],
+        "1": ["Charm Person", "Healing Word", "Dissonant Whispers", "Faerie Fire", "Detect Magic"],
+        "2": ["Invisibility", "Suggestion"],
+    },
+    "cleric": {
+        "cantrip": ["Guidance", "Sacred Flame", "Spare the Dying", "Thaumaturgy", "Mending"],
+        "1": ["Bless", "Cure Wounds", "Healing Word", "Sanctuary", "Shield of Faith", "Command"],
+        "2": ["Aid", "Lesser Restoration", "Prayer of Healing", "Spiritual Weapon"],
+        "3": ["Revivify", "Dispel Magic", "Spirit Guardians"],
+        "4": ["Death Ward", "Freedom of Movement"],
+        "5": ["Greater Restoration", "Mass Cure Wounds"],
+        "6": ["Heal", "Blade Barrier"],
+    },
+    "druid": {
+        "cantrip": ["Guidance", "Produce Flame", "Thorn Whip"],
+        "1": ["Cure Wounds", "Faerie Fire", "Fog Cloud", "Healing Word", "Detect Magic"],
+    },
+    "paladin": {
+        "1": ["Bless", "Cure Wounds", "Detect Magic", "Command", "Shield of Faith"],
+        "2": ["Lesser Restoration", "Magic Weapon", "Aid"],
+        "3": ["Revivify", "Aura of Vitality"],
+        "4": ["Death Ward", "Banishment"],
+    },
+    "ranger": {
+        "1": ["Cure Wounds", "Detect Magic", "Fog Cloud", "Hunter's Mark"],
+        "2": ["Pass Without Trace", "Spike Growth", "Lesser Restoration"],
+        "3": ["Conjure Animals", "Lightning Arrow"],
+    },
+    "sorcerer": {
+        "cantrip": ["Fire Bolt", "Mage Hand", "Prestidigitation", "Ray of Frost"],
+        "1": ["Magic Missile", "Shield", "Burning Hands", "Charm Person"],
+        "2": ["Misty Step", "Invisibility"],
+        "3": ["Fly", "Counterspell"],
+    },
+    "warlock": {
+        "cantrip": ["Eldritch Blast", "Mage Hand", "Minor Illusion", "Prestidigitation"],
+        "1": ["Charm Person", "Hex"],
+        "2": ["Misty Step", "Invisibility"],
+        "3": ["Fly"],
+    },
+    "wizard": {
+        "cantrip": ["Fire Bolt", "Mage Hand", "Prestidigitation", "Ray of Frost", "Mending"],
+        "1": ["Magic Missile", "Shield", "Detect Magic", "Find Familiar", "Sleep"],
+        "2": ["Invisibility", "Misty Step", "Mirror Image", "Scorching Ray"],
+        "3": ["Fly", "Counterspell", "Fireball"],
+        "4": ["Dimension Door", "Polymorph"],
+        "5": ["Hold Monster", "Cone of Cold"],
+    },
+    "artificer": {
+        "cantrip": ["Mending", "Mage Hand", "Fire Bolt"],
+        "1": ["Cure Wounds", "Faerie Fire", "Grease", "Identify"],
+    },
+}
+
+SUBCLASS_REQUIRED_FEATURES = {
+    ("rogue", "arcane trickster"): ["Arcane Trickster Spellcasting", "Mage Hand Legerdemain"],
+}
+
+SUBCLASS_FORBIDDEN_FEATURES = {
+    ("rogue", "arcane trickster"): {
+        "Sculpt Spells",
+        "Arcane Recovery",
+    },
+}
+
 FULL_CASTER_MAX_LEVEL = [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 9]
 HALF_CASTER_MAX_LEVEL = [0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5]
 WARLOCK_MAX_LEVEL = [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
@@ -254,40 +407,68 @@ SPELL_CLASS_ALLOWLIST = {
     "astral projection": {"cleric", "warlock", "wizard"},
     "bless": {"cleric", "paladin"},
     "burning hands": {"sorcerer", "wizard"},
+    "charm person": {"bard", "druid", "sorcerer", "warlock", "wizard"},
     "cloudkill": {"sorcerer", "wizard"},
+    "color spray": {"bard", "sorcerer", "wizard"},
     "command": {"cleric", "paladin"},
+    "comprehend languages": {"bard", "sorcerer", "warlock", "wizard"},
+    "counterspell": {"sorcerer", "warlock", "wizard"},
     "cure wounds": {"artificer", "bard", "cleric", "druid", "paladin", "ranger"},
+    "detect magic": {"bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "wizard"},
+    "dissonant whispers": {"bard"},
+    "disguise self": {"artificer", "bard", "sorcerer", "wizard"},
     "dimension door": {"bard", "sorcerer", "warlock", "wizard"},
     "disintegrate": {"sorcerer", "wizard"},
     "eldritch blast": {"warlock"},
+    "feather fall": {"bard", "sorcerer", "wizard"},
     "faerie fire": {"artificer", "bard", "druid"},
+    "find familiar": {"wizard"},
     "fire bolt": {"artificer", "sorcerer", "wizard"},
     "fireball": {"sorcerer", "wizard"},
     "fire wall": {"druid", "sorcerer", "wizard"},
+    "fog cloud": {"druid", "ranger", "sorcerer", "wizard"},
     "fly": {"sorcerer", "warlock", "wizard"},
+    "grease": {"wizard", "artificer"},
     "guidance": {"artificer", "cleric", "druid"},
+    "hex": {"warlock"},
+    "aid": {"artificer", "cleric", "paladin"},
     "healing word": {"bard", "cleric", "druid"},
     "hold monster": {"bard", "cleric", "sorcerer", "warlock", "wizard"},
+    "identify": {"artificer", "bard", "wizard"},
     "invisibility": {"bard", "sorcerer", "warlock", "wizard"},
+    "lesser restoration": {"artificer", "bard", "cleric", "druid", "paladin", "ranger"},
     "mage armor": {"sorcerer", "wizard"},
     "mage hand": {"artificer", "bard", "sorcerer", "warlock", "wizard"},
     "magic missile": {"sorcerer", "wizard"},
     "mending": {"artificer", "bard", "cleric", "druid", "sorcerer", "wizard"},
     "message": {"artificer", "bard", "sorcerer", "wizard"},
     "misty step": {"sorcerer", "warlock", "wizard"},
+    "minor illusion": {"bard", "sorcerer", "warlock", "wizard"},
     "power word heal": {"bard", "cleric"},
     "power word kill": {"bard", "sorcerer", "warlock", "wizard"},
     "prestidigitation": {"artificer", "bard", "sorcerer", "warlock", "wizard"},
+    "prayer of healing": {"cleric"},
+    "protection from evil and good": {"cleric", "paladin", "warlock", "wizard"},
+    "produce flame": {"druid"},
     "ray of frost": {"artificer", "sorcerer", "wizard"},
     "revivify": {"artificer", "cleric", "paladin", "ranger"},
+    "sacred flame": {"cleric"},
+    "sanctuary": {"cleric"},
+    "scorching ray": {"sorcerer", "wizard"},
     "shield": {"sorcerer", "wizard"},
+    "shield of faith": {"cleric", "paladin"},
     "shocking grasp": {"artificer", "sorcerer", "wizard"},
+    "silent image": {"bard", "sorcerer", "wizard"},
+    "sleep": {"bard", "sorcerer", "wizard"},
     "spare the dying": {"artificer", "cleric"},
     "spiritual weapon": {"cleric"},
     "suggestion": {"bard", "sorcerer", "warlock", "wizard"},
+    "tashas hideous laughter": {"bard", "wizard"},
     "teleport": {"bard", "sorcerer", "wizard"},
+    "thaumaturgy": {"cleric"},
     "thorn whip": {"artificer", "druid"},
     "thunderwave": {"bard", "druid", "sorcerer", "wizard"},
+    "vicious mockery": {"bard"},
 }
 
 SPELL_LEVEL_OVERRIDES = {
@@ -295,40 +476,68 @@ SPELL_LEVEL_OVERRIDES = {
     "astral projection": 9,
     "bless": 1,
     "burning hands": 1,
+    "charm person": 1,
     "cloudkill": 5,
+    "color spray": 1,
     "command": 1,
+    "comprehend languages": 1,
+    "counterspell": 3,
     "cure wounds": 1,
+    "detect magic": 1,
+    "dissonant whispers": 1,
+    "disguise self": 1,
     "dimension door": 4,
     "disintegrate": 6,
     "eldritch blast": 0,
+    "feather fall": 1,
     "faerie fire": 1,
+    "find familiar": 1,
     "fire bolt": 0,
     "fireball": 3,
     "fire wall": 4,
+    "fog cloud": 1,
     "fly": 3,
+    "grease": 1,
     "guidance": 0,
+    "aid": 2,
+    "hex": 1,
     "healing word": 1,
     "hold monster": 5,
+    "identify": 1,
     "invisibility": 2,
+    "lesser restoration": 2,
     "mage armor": 1,
     "mage hand": 0,
     "magic missile": 1,
     "mending": 0,
     "message": 0,
     "misty step": 2,
+    "minor illusion": 0,
     "power word heal": 9,
     "power word kill": 9,
     "prestidigitation": 0,
+    "prayer of healing": 2,
+    "protection from evil and good": 1,
+    "produce flame": 0,
     "ray of frost": 0,
     "revivify": 3,
+    "sacred flame": 0,
+    "sanctuary": 1,
+    "scorching ray": 2,
     "shield": 1,
+    "shield of faith": 1,
     "shocking grasp": 0,
+    "silent image": 1,
+    "sleep": 1,
     "spare the dying": 0,
     "spiritual weapon": 2,
     "suggestion": 2,
+    "tashas hideous laughter": 1,
     "teleport": 7,
+    "thaumaturgy": 0,
     "thorn whip": 0,
     "thunderwave": 1,
+    "vicious mockery": 0,
 }
 
 
@@ -362,6 +571,205 @@ def canonical_race_key(text: str) -> str:
     if "dwarf" in value:
         return "dwarf"
     return value
+
+
+def default_racial_features(race_key: str) -> list[str]:
+    return list(RACE_DEFAULT_FEATURES.get(race_key, []))
+
+
+def default_racial_senses(race_key: str) -> str:
+    return RACE_DEFAULT_SENSES.get(race_key, "")
+
+
+def generate_diverse_name(race_key: str) -> str:
+    key = race_key or "default"
+    if key not in NAME_PARTS:
+        if "elf" in key:
+            key = "elf" if "half" not in key else "half-elf"
+        elif "dwarf" in key:
+            key = "dwarf"
+        elif "gnome" in key:
+            key = "gnome"
+        elif "halfling" in key:
+            key = "halfling"
+        elif "dragonborn" in key:
+            key = "dragonborn"
+        elif "tiefling" in key:
+            key = "tiefling"
+        elif "orc" in key:
+            key = "half-orc" if "half" in key else "orc"
+        elif "goblin" in key:
+            key = "goblin"
+        elif "human" in key:
+            key = "human"
+        else:
+            key = "default"
+    parts = NAME_PARTS[key]
+    return f"{random.choice(parts['first'])} {random.choice(parts['last'])}"
+
+
+def spellcasting_profile(class_key: str, subclass: str = "") -> dict | None:
+    subclass_key = normalize_key(subclass or "")
+    for (candidate_class, candidate_subclass), override in SUBCLASS_SPELLCASTING.items():
+        if candidate_class == class_key and normalize_key(candidate_subclass) == subclass_key:
+            return override
+    return (CLASS_RULES.get(class_key) or {}).get("spellcasting")
+
+
+def build_has_spell_source(class_key: str, subclass: str, race_key: str, features: list[str]) -> bool:
+    if spellcasting_profile(class_key, subclass):
+        return True
+
+    feature_text = " ".join(str(feature or "") for feature in (features or [])).lower()
+    explicit_magic_markers = (
+        "drow magic",
+        "cantrip",
+        "spellcasting",
+        "innate spellcasting",
+    )
+    if any(marker in feature_text for marker in explicit_magic_markers):
+        return True
+
+    # Conservative racial handling: only force spells when the chosen racial features
+    # explicitly indicate magical traits. Ordinary races without such features may remain empty.
+    if race_key in {"drow", "high elf"} and feature_text:
+        if "magic" in feature_text or "cantrip" in feature_text:
+            return True
+
+    return False
+
+
+def normalize_features_for_build(features: list[str], class_key: str, subclass: str) -> tuple[list[str], list[str]]:
+    normalized = []
+    seen = set()
+    for feature in features or []:
+        text = str(feature).strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key not in seen:
+            seen.add(key)
+            normalized.append(text)
+
+    corrected = []
+    subclass_key = normalize_key(subclass or "")
+    forbidden_set = set()
+    for (candidate_class, candidate_subclass), names in SUBCLASS_FORBIDDEN_FEATURES.items():
+        if candidate_class == class_key and normalize_key(candidate_subclass) == subclass_key:
+            forbidden_set = names
+            break
+    forbidden = {name.lower() for name in forbidden_set}
+    if forbidden:
+        kept = []
+        for feature in normalized:
+            if feature.lower() in forbidden:
+                corrected.append(f"removed invalid subclass feature: {feature}")
+            else:
+                kept.append(feature)
+        normalized = kept
+
+    existing = {feature.lower() for feature in normalized}
+    required_features = []
+    for (candidate_class, candidate_subclass), names in SUBCLASS_REQUIRED_FEATURES.items():
+        if candidate_class == class_key and normalize_key(candidate_subclass) == subclass_key:
+            required_features = names
+            break
+    for required in required_features:
+        if required.lower() not in existing:
+            normalized.append(required)
+            existing.add(required.lower())
+            corrected.append(f"added required subclass feature: {required}")
+
+    return normalized, corrected
+
+
+def default_spells_for_build(class_key: str, subclass: str) -> dict[str, list[str]]:
+    subclass_key = normalize_key(subclass or "")
+    defaults = None
+    for (candidate_class, candidate_subclass), spell_map in SUBCLASS_DEFAULT_SPELLS.items():
+        if candidate_class == class_key and normalize_key(candidate_subclass) == subclass_key:
+            defaults = spell_map
+            break
+    if defaults is None:
+        defaults = CLASS_DEFAULT_SPELLS.get(class_key, {})
+    return {bucket: list(names) for bucket, names in defaults.items()}
+
+
+def generated_fallback_spells_for_build(class_key: str, subclass: str, level: int, spellcasting_ability_mod: int) -> dict[str, list[str]]:
+    capacity = spell_capacity_for_build(class_key, subclass, level, spellcasting_ability_mod)
+    if capacity["rule"] == "noncaster":
+        return {}
+
+    profile = spellcasting_profile(class_key, subclass) or {}
+    effective_spell_class = profile.get("source_class", class_key)
+    corpus = spell_corpus()
+    priority = default_spells_for_build(class_key, subclass)
+
+    by_level: dict[int, list[str]] = {}
+    for norm, allowed_classes in SPELL_CLASS_ALLOWLIST.items():
+        if effective_spell_class not in allowed_classes:
+            continue
+        level_value = SPELL_LEVEL_OVERRIDES.get(norm)
+        meta = corpus.get(norm)
+        if level_value is None:
+            if not meta:
+                continue
+            level_value = meta["level"]
+        if level_value > capacity["max_spell_level"]:
+            continue
+        display_name = meta["name"] if meta else norm.title()
+        by_level.setdefault(level_value, [])
+        if display_name not in by_level[level_value]:
+            by_level[level_value].append(display_name)
+
+    result: dict[str, list[str]] = {}
+
+    cantrip_pool = list(priority.get("cantrip", []))
+    for required in profile.get("forced_cantrips", []):
+        if required not in cantrip_pool:
+            cantrip_pool.insert(0, required)
+    for name in sorted(by_level.get(0, [])):
+        if name not in cantrip_pool:
+            cantrip_pool.append(name)
+    if capacity["cantrips"] > 0 and cantrip_pool:
+        result["cantrip"] = cantrip_pool[: capacity["cantrips"]]
+
+    if capacity["non_cantrip_limit"] <= 0:
+        return result
+
+    leveled_selected: dict[str, list[str]] = {}
+    total = 0
+    max_level = max(1, capacity["max_spell_level"])
+
+    per_level_pools: dict[int, list[str]] = {}
+    for lvl in range(1, max_level + 1):
+        pool = list(priority.get(str(lvl), []))
+        for name in sorted(by_level.get(lvl, [])):
+            if name not in pool:
+                pool.append(name)
+        per_level_pools[lvl] = pool
+
+    while total < capacity["non_cantrip_limit"]:
+        added_this_round = False
+        for lvl in range(1, max_level + 1):
+            bucket = str(lvl)
+            selected = leveled_selected.setdefault(bucket, [])
+            pool = per_level_pools.get(lvl, [])
+            next_choice = next((name for name in pool if name not in selected), None)
+            if next_choice:
+                selected.append(next_choice)
+                total += 1
+                added_this_round = True
+                if total >= capacity["non_cantrip_limit"]:
+                    break
+        if not added_this_round:
+            break
+
+    for bucket, names in leveled_selected.items():
+        if names:
+            result[bucket] = names
+
+    return result
 
 
 def normalize_skill_name(name: str) -> str:
@@ -631,7 +1039,11 @@ def max_spell_level_for_class(class_key: str, level: int):
 
 
 def spell_capacity_for_class(class_key: str, level: int, ability_mod_value: int):
-    spellcasting = (CLASS_RULES.get(class_key) or {}).get("spellcasting")
+    return spell_capacity_for_build(class_key, "", level, ability_mod_value)
+
+
+def spell_capacity_for_build(class_key: str, subclass: str, level: int, ability_mod_value: int):
+    spellcasting = spellcasting_profile(class_key, subclass)
     if not spellcasting or level <= 0:
         return {"cantrips": 0, "max_spell_level": 0, "non_cantrip_limit": 0, "rule": "noncaster"}
 
@@ -657,6 +1069,16 @@ def spell_capacity_for_class(class_key: str, level: int, ability_mod_value: int)
     elif cast_type == "prepared_artificer":
         limit = max(1, (level // 2) + ability_mod_value)
         rule = "prepared_artificer"
+    elif cast_type == "third_known":
+        cantrips = 3 if level >= 3 else 0
+        max_spell_level = 1 if level < 7 else 2 if level < 13 else 3 if level < 19 else 4
+        if class_key == "rogue":
+            limit = [0, 0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 11, 11, 13, 13][level]
+        elif class_key == "fighter":
+            limit = [0, 0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 11, 11, 13, 13][level]
+        else:
+            limit = 0
+        rule = "third_known"
     else:
         limit = 0
         rule = cast_type
@@ -669,13 +1091,28 @@ def spell_capacity_for_class(class_key: str, level: int, ability_mod_value: int)
     }
 
 
-def validate_spells(spells, class_key: str, level: int, spellcasting_ability_mod: int):
+def minimum_expected_leveled_spells(capacity: dict) -> int:
+    rule = capacity.get("rule")
+    limit = int(capacity.get("non_cantrip_limit") or 0)
+    max_spell_level = int(capacity.get("max_spell_level") or 0)
+    if rule == "prepared":
+        return min(limit, max(3, max_spell_level + 4))
+    if rule == "prepared_half":
+        return min(limit, max(2, max_spell_level + 3))
+    if rule == "prepared_artificer":
+        return min(limit, max(2, max_spell_level + 2))
+    return limit
+
+
+def validate_spells(spells, class_key: str, level: int, spellcasting_ability_mod: int, subclass: str = ""):
     normalized = normalize_spell_dict(spells)
     corpus = spell_corpus()
     issues = []
     total_non_cantrip = 0
     validated = {}
-    capacity = spell_capacity_for_class(class_key, level, spellcasting_ability_mod)
+    capacity = spell_capacity_for_build(class_key, subclass, level, spellcasting_ability_mod)
+    profile = spellcasting_profile(class_key, subclass) or {}
+    effective_spell_class = profile.get("source_class", class_key)
 
     if capacity["rule"] == "noncaster" and normalized:
         return ["non-spellcasting class has spells"], {}, capacity
@@ -693,7 +1130,7 @@ def validate_spells(spells, class_key: str, level: int, spellcasting_ability_mod
                 issues.append(f"unknown spell {name}")
                 continue
             allowed_classes = SPELL_CLASS_ALLOWLIST.get(norm)
-            if allowed_classes and class_key and class_key not in allowed_classes:
+            if allowed_classes and effective_spell_class and effective_spell_class not in allowed_classes:
                 issues.append(f"spell {meta['name']} not on {class_key} list")
                 continue
             if expected_level is not None and meta["level"] != expected_level:
@@ -709,12 +1146,26 @@ def validate_spells(spells, class_key: str, level: int, spellcasting_ability_mod
                 total_non_cantrip += len(validated[bucket])
 
     cantrip_count = len(validated.get("cantrip", []))
+    for required_cantrip in profile.get("forced_cantrips", []):
+        if required_cantrip not in validated.get("cantrip", []):
+            issues.append(f"missing required cantrip {required_cantrip}")
+            validated.setdefault("cantrip", []).insert(0, required_cantrip)
+    if "cantrip" in validated:
+        validated["cantrip"] = dedupe(validated["cantrip"])
+        cantrip_count = len(validated["cantrip"])
+
     if cantrip_count > capacity["cantrips"]:
         issues.append(f"too many cantrips ({cantrip_count}>{capacity['cantrips']})")
         validated["cantrip"] = validated.get("cantrip", [])[: capacity["cantrips"]]
         cantrip_count = len(validated.get("cantrip", []))
+    elif capacity["cantrips"] > 0 and cantrip_count < capacity["cantrips"]:
+        issues.append(f"too few cantrips ({cantrip_count}<{capacity['cantrips']})")
+
+    required_leveled_spells = minimum_expected_leveled_spells(capacity)
 
     if total_non_cantrip > capacity["non_cantrip_limit"]:
         issues.append(f"too many leveled spells ({total_non_cantrip}>{capacity['non_cantrip_limit']})")
+    elif capacity["rule"] in {"known", "known_half", "known_warlock", "third_known", "prepared", "prepared_half", "prepared_artificer"} and total_non_cantrip < required_leveled_spells:
+        issues.append(f"too few leveled spells ({total_non_cantrip}<{required_leveled_spells})")
 
     return dedupe(issues), validated, capacity

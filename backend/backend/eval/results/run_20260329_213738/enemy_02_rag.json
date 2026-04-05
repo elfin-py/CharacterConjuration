@@ -1,0 +1,21 @@
+{
+  "prompt_id": "enemy_02",
+  "entity_type": "enemy",
+  "condition": "rag",
+  "payload": {
+    "entity_type": "enemy",
+    "roll_mode": "auto",
+    "experimental_mode": "rag",
+    "race": "Human",
+    "dnd_class": "Warlock",
+    "level": 7,
+    "alignment": "Lawful Evil",
+    "concept": "A cult enforcer bound to infernal chains, designed to pressure the party with control effects and dark charisma.",
+    "gender": null,
+    "age_group": null,
+    "manual_rolls": null,
+    "ability_assignment": null
+  },
+  "status": 0,
+  "response": "<urlopen error [Errno 1] Operation not permitted>"
+}

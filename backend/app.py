@@ -12,6 +12,7 @@ import json
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 
@@ -25,6 +26,7 @@ import pickle
 from io import BytesIO
 from fpdf import FPDF
 from fill_pdf import fill_pdf
+from index_stubs import NullIndex, NullRetriever
 from rules_data import (
     ABILITIES,
     BACKGROUND_SKILLS,
@@ -36,20 +38,28 @@ from rules_data import (
     canonical_race_key,
     compute_armor_class,
     compute_hit_points,
+    build_has_spell_source,
+    default_racial_features,
+    default_racial_senses,
     dedupe,
+    generate_diverse_name,
+    generated_fallback_spells_for_build,
     normalize_armor_proficiencies,
+    normalize_features_for_build,
     normalize_skill_name,
     normalize_skill_proficiencies,
     normalize_saving_throw_proficiencies,
     normalize_weapon_proficiencies,
     prof_bonus,
-    spell_capacity_for_class,
+    spellcasting_profile,
     validate_spells,
 )
 
 # Logger setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+BACKEND_DIR = Path(__file__).resolve().parent
+EVAL_RESULTS_DIR = BACKEND_DIR / "eval" / "results"
 
 # Load local env (expects backend/.env with HF_TOKEN)
 DOTENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
@@ -76,21 +86,96 @@ if not HF_MODEL_CANDIDATES:
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["PYTORCH_MPS_DISABLE"] = "1"  # avoid Mac MPS pickle mismatches
 
-# Load the serialized index once; if unavailable, keep serving with an empty retriever
-try:
-    with open("character_index.pkl", "rb") as f:
-        index: VectorStoreIndex = pickle.load(f)
-    retriever = index.as_retriever(similarity_top_k=5)
-except Exception as exc:  # fallback if pickle/device mismatch
-    logger.warning("Failed to load character_index.pkl (%s); using empty retriever", exc)
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9']+", (text or "").lower())
 
-    class _NullRetriever:
-        """Stub retriever so the API stays up even without an index."""
 
-        def retrieve(self, _: str):
+class _TextNode:
+    def __init__(self, text: str):
+        self.text = text
+
+    def get_content(self):
+        return self.text
+
+
+class MarkdownFallbackRetriever:
+    """Simple lexical retriever over markdown files when the vector index is unavailable."""
+
+    def __init__(self, base_dir: Path, top_k: int = 5, chunk_size: int = 1600, chunk_overlap: int = 200):
+        self.top_k = top_k
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.documents: list[tuple[str, Counter, set[str]]] = []
+        for root in (base_dir / "data" / "split_md", base_dir / "data" / "md"):
+            if not root.exists():
+                continue
+            for path in root.rglob("*.md"):
+                text = path.read_text(encoding="utf-8", errors="ignore").strip()
+                if not text:
+                    continue
+                for chunk in self._chunk_text(text):
+                    tokens = _tokenize(chunk)
+                    if not tokens:
+                        continue
+                    self.documents.append((chunk, Counter(tokens), set(tokens)))
+
+    def _chunk_text(self, text: str) -> list[str]:
+        if len(text) <= self.chunk_size:
+            return [text]
+        chunks = []
+        step = max(1, self.chunk_size - self.chunk_overlap)
+        for start in range(0, len(text), step):
+            chunk = text[start : start + self.chunk_size].strip()
+            if len(chunk) < 200:
+                continue
+            last_newline = chunk.rfind("\n")
+            if last_newline > 800:
+                chunk = chunk[:last_newline].strip()
+            chunks.append(chunk)
+            if start + self.chunk_size >= len(text):
+                break
+        return chunks or [text[: self.chunk_size]]
+
+    def retrieve(self, question: str):
+        query_tokens = _tokenize(question)
+        if not query_tokens or not self.documents:
             return []
+        query_counts = Counter(query_tokens)
+        query_set = set(query_tokens)
+        scored = []
+        for text, token_counts, token_set in self.documents:
+            overlap = query_set & token_set
+            if not overlap:
+                continue
+            tf_score = sum(min(query_counts[t], token_counts[t]) for t in overlap)
+            phrase_bonus = 3 if question and question.lower() in text.lower() else 0
+            score = tf_score + phrase_bonus
+            if score > 0:
+                scored.append((score, text))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [_TextNode(text) for _, text in scored[: self.top_k]]
 
-    retriever = _NullRetriever()
+
+# Load the serialized index once; if unavailable, keep serving with a markdown fallback
+INDEX_PATH = BACKEND_DIR / "character_index.pkl"
+retriever_mode = "stub"
+try:
+    with INDEX_PATH.open("rb") as f:
+        index: VectorStoreIndex = pickle.load(f)
+    if isinstance(index, NullIndex):
+        raise ValueError("character_index.pkl contains the fallback stub index")
+    retriever = index.as_retriever(similarity_top_k=5)
+    retriever_mode = "vector_index"
+except Exception as exc:  # fallback if pickle/device mismatch
+    logger.warning("Failed to load character_index.pkl (%s); trying markdown fallback", exc)
+    fallback = MarkdownFallbackRetriever(BACKEND_DIR)
+    if fallback.documents:
+        retriever = fallback
+        retriever_mode = "markdown_fallback"
+        logger.info("Loaded markdown fallback retriever with %d documents", len(fallback.documents))
+    else:
+        logger.warning("No markdown documents available; using empty retriever")
+        retriever = NullRetriever()
 
 def chat_with_fallback(messages):
     last_err = None
@@ -126,14 +211,12 @@ def retrieve_context(question: str, enabled: bool = True) -> Tuple[str, list[str
     return "\n\n".join(context_parts), raw_sources
 
 app = FastAPI()
-BACKEND_DIR = Path(__file__).resolve().parent
-EVAL_RESULTS_DIR = BACKEND_DIR / "eval" / "results"
 
 
 class GenerateRequest(BaseModel):
     entity_type: str = "character"          # "character" | "enemy" | "npc"
     roll_mode: str                           # "auto" | "standard_array" | "manual" | "point_buy"
-    experimental_mode: str = "rag"          # "no_rag" | "rag" | "validated_iterative_rag"
+    experimental_mode: str = "validated_iterative_rag"  # "no_rag" | "rag" | "validated_iterative_rag"
     manual_rolls: Optional[List[int]] = None
     ability_assignment: Optional[Dict[str, int]] = None  # {"STR": 15, ...}
     race: Optional[str] = None
@@ -147,6 +230,10 @@ class GenerateRequest(BaseModel):
 
 class SheetRequest(BaseModel):
     sheet_json: dict
+
+
+def sample_default_level() -> int:
+    return max(1, min(20, round(random.triangular(1, 20, 6))))
 
 
 def build_question(req: GenerateRequest) -> str:
@@ -226,7 +313,7 @@ def build_messages(question: str, context: str, validation_feedback: Optional[st
         "  \"race\": \"...\",  // choose based on user input if provided; otherwise pick a fitting race from context\n"
         "  \"class\": \"...\", // do NOT copy this example; choose a class that fits the request; never default to wizard unless user asked\n"
         "  \"subclass\": \"...\" (use a suitable subclass to the chosen class),\n"
-        "  \"level\": 5,  // if user did not give a level, pick a sensible one (default around 3)\n"
+        "  \"level\": 6,  // if user did not give a level, pick a plausible random level centered around 6\n"
         "  \"background\": \"...\", // select a background that appears in the provided context/books; reject placeholders like Unspecified or generic Sage unless explicitly requested\n"
         "  \"alignment\": \"Chaotic Good\",  // use full words, no abbreviations; honour provided alignment if given\n"
         "  \"hp\": 32,\n"
@@ -257,6 +344,9 @@ def build_messages(question: str, context: str, validation_feedback: Optional[st
         "- If level allows feats or ASIs and choices are implied or necessary, add them to the features array (include the feat names or note \"ASI\" with the adjusted scores).\n"
         "- Prefer backgrounds, languages, spells, and gear found in the provided context/books.\n"
         "- If entity_type is NPC, still fill the schema with NPC-appropriate class/background. If enemy, use class='enemy', include size/creature_type/challenge_rating/senses, and fill stats similarly.\n"
+        "- Keep short_blurb to 4-6 full sentences; do not return fragmentary blurbs.\n"
+        "- Never put spells in the wrong level bucket. Cantrips must be in 'cantrip'; leveled spells must be under their numeric level.\n"
+        "- Never assign spells from the wrong class or subclass spell source.\n"
         "Respond with JSON only, no commentary.",
     ]
     if validation_feedback:
@@ -345,12 +435,48 @@ def parse_model_json(raw: str):
     }
 
 
+def build_fallback_blurb(req: GenerateRequest, *, race: str, class_name: str, subclass: str, background: str, alignment: str, entity_type: str) -> str:
+    concept = (req.concept or "a memorable role in the setting").strip().rstrip(".")
+    if entity_type == "enemy":
+        parts = [
+            f"This {race.lower() if race else 'creature'} threat is framed around {concept}.",
+            f"It is presented as a {alignment.lower()} {subclass.lower() + ' ' if subclass else ''}{class_name.lower() if class_name else 'enemy'} with a clear battlefield identity.",
+            "Its traits and actions are intended to read like a compact 5e stat block rather than a player-character sheet.",
+            "The result favors immediate table use, with concrete combat flavor and a distinct encounter role.",
+        ]
+    else:
+        role = f"{subclass} {class_name}".strip() if subclass else class_name
+        parts = [
+            f"This {race.lower() if race else 'character'} {role.lower() if role else 'adventurer'} is built around {concept}.",
+            f"The background of {background.lower() if background else 'an uncertain past'} shapes how they approach danger, allies, and responsibility.",
+            f"The characterization aims for a {alignment.lower()} tone with enough specificity to support role-play at the table.",
+            "The final build is written to feel mechanically grounded while still leaving room for player interpretation and growth.",
+        ]
+    return " ".join(parts)
+
+
+def count_spell_entries(spells: dict) -> tuple[int, int]:
+    cantrips = 0
+    leveled = 0
+    for bucket, names in (spells or {}).items():
+        if str(bucket).lower() in {"0", "cantrip", "cantrips"}:
+            cantrips += len(names or [])
+        else:
+            leveled += len(names or [])
+    return cantrips, leveled
+
+
 def collect_validation_issues(parsed: dict, req: GenerateRequest) -> list[str]:
     issues = []
     if not isinstance(parsed, dict):
         return ["response was not a JSON object"]
 
-    for field in ["name", "race", "background", "alignment", "short_blurb"]:
+    entity_type = (req.entity_type or "").lower()
+    required_fields = ["name", "race", "alignment", "short_blurb"]
+    if entity_type != "enemy":
+        required_fields.append("background")
+
+    for field in required_fields:
         value = parsed.get(field)
         if not value or not str(value).strip():
             issues.append(f"missing {field}")
@@ -386,7 +512,7 @@ def collect_validation_issues(parsed: dict, req: GenerateRequest) -> list[str]:
         if isinstance(value, str) and value.strip().lower() in placeholders:
             issues.append(f"placeholder {field}")
 
-    if (req.entity_type or "").lower() == "enemy":
+    if entity_type == "enemy":
         if not parsed.get("creature_type"):
             issues.append("enemy missing creature_type")
         if not parsed.get("challenge_rating"):
@@ -396,63 +522,91 @@ def collect_validation_issues(parsed: dict, req: GenerateRequest) -> list[str]:
         sentence_count = len([s for s in re.split(r"[.!?]+", parsed["short_blurb"]) if s.strip()])
         if sentence_count < 4:
             issues.append("short_blurb too short")
+    else:
+        issues.append("short_blurb too short")
 
     class_key = canonical_class_key(parsed.get("class") or req.dnd_class or "")
     race_key = canonical_race_key(parsed.get("race") or req.race or "")
     background_text = parsed.get("background") or ""
+    subclass = parsed.get("subclass") or ""
 
-    normalized_skill_profs, invalid_skill_profs, _ = normalize_skill_proficiencies(
-        parsed.get("skill_proficiencies") or [],
-        class_key,
-        background_text,
-    )
-    if invalid_skill_profs:
-        issues.append(f"invalid skill proficiencies: {', '.join(invalid_skill_profs)}")
+    if entity_type != "enemy":
+        normalized_skill_profs, invalid_skill_profs, _ = normalize_skill_proficiencies(
+            parsed.get("skill_proficiencies") or [],
+            class_key,
+            background_text,
+        )
+        if invalid_skill_profs:
+            issues.append(f"invalid skill proficiencies: {', '.join(invalid_skill_profs)}")
 
-    if class_key:
-        expected_count = (CLASS_RULES.get(class_key) or {}).get("skill_count")
-        background_key = canonical_background_key(background_text)
-        background_skills = BACKGROUND_SKILLS.get(background_key, [])
-        if expected_count is not None:
-            max_skills = expected_count + len(background_skills)
-            if len(normalized_skill_profs) > max_skills:
-                issues.append("too many skill proficiencies")
+        if class_key:
+            expected_count = (CLASS_RULES.get(class_key) or {}).get("skill_count")
+            background_key = canonical_background_key(background_text)
+            background_skills = BACKGROUND_SKILLS.get(background_key, [])
+            if expected_count is not None:
+                max_skills = expected_count + len(background_skills)
+                if len(normalized_skill_profs) > max_skills:
+                    issues.append("too many skill proficiencies")
 
-    normalized_save_profs, invalid_save_profs = normalize_saving_throw_proficiencies(
-        parsed.get("saving_throw_proficiencies") or [],
-        class_key,
-    )
-    if invalid_save_profs:
-        issues.append(f"invalid saving throw proficiencies: {', '.join(invalid_save_profs)}")
-    if class_key and normalized_save_profs != sorted((CLASS_RULES.get(class_key) or {}).get("saving_throws") or []):
-        issues.append("saving throw proficiencies do not match class")
+        normalized_save_profs, invalid_save_profs = normalize_saving_throw_proficiencies(
+            parsed.get("saving_throw_proficiencies") or [],
+            class_key,
+        )
+        if invalid_save_profs:
+            issues.append(f"invalid saving throw proficiencies: {', '.join(invalid_save_profs)}")
+        if class_key and normalized_save_profs != sorted((CLASS_RULES.get(class_key) or {}).get("saving_throws") or []):
+            issues.append("saving throw proficiencies do not match class")
 
-    _, invalid_weapon_profs = normalize_weapon_proficiencies(
-        parsed.get("weapon_proficiencies") or [],
-        class_key,
-        race_key,
-    )
-    if invalid_weapon_profs:
-        issues.append(f"invalid weapon proficiencies: {', '.join(map(str, invalid_weapon_profs))}")
+        _, invalid_weapon_profs = normalize_weapon_proficiencies(
+            parsed.get("weapon_proficiencies") or [],
+            class_key,
+            race_key,
+        )
+        if invalid_weapon_profs:
+            issues.append(f"invalid weapon proficiencies: {', '.join(map(str, invalid_weapon_profs))}")
 
-    _, invalid_armor_profs = normalize_armor_proficiencies(
-        parsed.get("armor_proficiencies") or [],
-        class_key,
-    )
-    if invalid_armor_profs:
-        issues.append(f"invalid armor proficiencies: {', '.join(map(str, invalid_armor_profs))}")
+        _, invalid_armor_profs = normalize_armor_proficiencies(
+            parsed.get("armor_proficiencies") or [],
+            class_key,
+        )
+        if invalid_armor_profs:
+            issues.append(f"invalid armor proficiencies: {', '.join(map(str, invalid_armor_profs))}")
 
-    if class_key and level_int > 0 and all(ability in stats for ability in ABILITIES):
+    if entity_type != "enemy" and class_key and level_int > 0 and all(ability in stats for ability in ABILITIES):
         ability_mods = {ability: ability_mod(int(stats[ability])) for ability in ABILITIES}
+        spell_source = build_has_spell_source(
+            class_key,
+            subclass,
+            race_key,
+            parsed.get("features") or [],
+        )
+        spellcasting_cfg = spellcasting_profile(class_key, subclass) or {}
         spell_issues, _, capacity = validate_spells(
             parsed.get("spells") or {},
             class_key,
             level_int,
-            ability_mods.get((CLASS_RULES.get(class_key) or {}).get("spellcasting", {}).get("ability", ""), 0),
+            ability_mods.get(spellcasting_cfg.get("ability", ""), 0),
+            subclass,
         )
         issues.extend(spell_issues)
-        if capacity["rule"] == "noncaster" and parsed.get("spells"):
+        if not spell_source and parsed.get("spells"):
             issues.append("noncaster has spell entries")
+        if spell_source and capacity["non_cantrip_limit"] > 0:
+            non_cantrip_count = sum(
+                len(names)
+                for bucket, names in (parsed.get("spells") or {}).items()
+                if str(bucket).lower() not in {"0", "cantrip", "cantrips"}
+            )
+            if non_cantrip_count == 0:
+                issues.append("spell source missing leveled spells")
+        elif spell_source and capacity["cantrips"] > 0:
+            cantrip_count = sum(
+                len(names)
+                for bucket, names in (parsed.get("spells") or {}).items()
+                if str(bucket).lower() in {"0", "cantrip", "cantrips"}
+            )
+            if cantrip_count == 0:
+                issues.append("spell source missing cantrips")
 
         deterministic_hp, _ = compute_hit_points(class_key, level_int, int(stats["CON"]), parsed_hp=parsed.get("hp"))
         parsed_hp = parsed.get("hp")
@@ -490,6 +644,7 @@ def generate_model_output(req: GenerateRequest, question: str):
     used_model = ""
     parsed = {}
     validation_issues = []
+    best_attempt = None
 
     for attempt in range(1, max_attempts + 1):
         messages = build_messages(question, context, validation_feedback=validation_feedback)
@@ -507,18 +662,28 @@ def generate_model_output(req: GenerateRequest, question: str):
 
         parsed = parse_model_json(raw)
         validation_issues = collect_validation_issues(parsed, req)
-        attempts.append(
-            {
-                "attempt": attempt,
-                "used_model": used_model,
-                "validation_issues": validation_issues,
-            }
-        )
+        attempt_record = {
+            "attempt": attempt,
+            "used_model": used_model,
+            "validation_issues": validation_issues,
+            "raw": raw,
+            "parsed": parsed,
+        }
+        attempts.append(attempt_record)
+
+        if best_attempt is None or len(validation_issues) < len(best_attempt["validation_issues"]):
+            best_attempt = attempt_record
 
         if mode != "validated_iterative_rag" or not validation_issues:
             break
 
         validation_feedback = "; ".join(validation_issues)
+
+    if best_attempt is not None:
+        raw = best_attempt["raw"]
+        used_model = best_attempt["used_model"]
+        parsed = best_attempt["parsed"]
+        validation_issues = best_attempt["validation_issues"]
 
     return {
         "experimental_mode": mode,
@@ -611,10 +776,13 @@ def generate_character(req: GenerateRequest):
                 raise HTTPException(status_code=400, detail="Manual assignment must use the provided rolls.")
         stats_norm.update(normalized)
 
+    entity_type = (req.entity_type or "character").lower()
     class_name = parsed.get("class")
-    if isinstance(class_name, str) and ("/" in class_name or "(" in class_name) and "multiclass" not in (question.lower()):
+    if entity_type == "enemy":
+        class_name = "enemy"
+    elif isinstance(class_name, str) and ("/" in class_name or "(" in class_name) and "multiclass" not in (question.lower()):
         class_name = class_name.split("/")[0].split("(")[0].strip()
-    class_key = canonical_class_key(class_name or req.dnd_class or "")
+    class_key = "" if entity_type == "enemy" else canonical_class_key(class_name or req.dnd_class or "")
     cls_lower = class_key or (parsed.get("class") or "").lower()
     # Enforce multiclass ability minimums (PHB)
     class_min = {
@@ -650,12 +818,12 @@ def generate_character(req: GenerateRequest):
     # Default level to a plausible random range if neither the model nor user provided one
     level = coerce_int(parsed.get("level") or req.level)
     if not level:
-        level = random.randint(2, 10)
+        level = sample_default_level()
     alignment = parsed.get("alignment") or req.alignment or "Unspecified"
     gender = parsed.get("gender") or req.gender or "Unspecified"
     age_group = parsed.get("age_group") or req.age_group or "Unspecified"
-    background = parsed.get("background") or "Unspecified"
-    if (not background) or background.lower() in {"unspecified", "sage"}:
+    background = parsed.get("background") or ("Unspecified" if entity_type != "enemy" else "")
+    if entity_type != "enemy" and ((not background) or background.lower() in {"unspecified", "sage"}):
         fallback_backgrounds = [
             "Soldier",
             "Criminal",
@@ -673,6 +841,10 @@ def generate_character(req: GenerateRequest):
         ]
         background = random.choice(fallback_backgrounds)
     race = parsed.get("race") or "Unspecified"
+    race_key = canonical_race_key(race)
+    model_name = str(parsed.get("name") or "").strip()
+    generated_name = generate_diverse_name(race_key)
+    final_name = generated_name if not model_name or len(model_name.split()) < 2 else generated_name
     proficiencies = parsed.get("proficiencies") or []
     skill_profs = parsed.get("skill_proficiencies") or []
     saving_throw_profs = parsed.get("saving_throw_proficiencies") or []
@@ -683,6 +855,17 @@ def generate_character(req: GenerateRequest):
     spells = parsed.get("spells") or {}
     features = parsed.get("features") or []
     equipment = parsed.get("equipment") or []
+    subclass = parsed.get("subclass") or ""
+
+    if entity_type == "enemy":
+        creature_type = parsed.get("creature_type") or f"humanoid ({(race or 'unknown').lower()})"
+        challenge_rating = parsed.get("challenge_rating") or str(max(1, round(level / 2)))
+        if not isinstance(spells, dict):
+            spells = {}
+        # Avoid forcing enemy spell fallback; enemies may be non-spellcasters or use custom powers.
+    else:
+        creature_type = parsed.get("creature_type")
+        challenge_rating = parsed.get("challenge_rating")
 
     pb = prof_bonus(level)
 
@@ -697,20 +880,27 @@ def generate_character(req: GenerateRequest):
             val += pb
         return val
 
-    skill_profs, invalid_skill_profs, background_key = normalize_skill_proficiencies(
-        skill_profs,
-        class_key,
-        background,
-    )
-    profs_lower = [p.lower() for p in skill_profs]
+    if entity_type != "enemy":
+        skill_profs, invalid_skill_profs, background_key = normalize_skill_proficiencies(
+            skill_profs,
+            class_key,
+            background,
+        )
+        profs_lower = [p.lower() for p in skill_profs]
+    else:
+        invalid_skill_profs = []
+        background_key = ""
 
     skills = {k: skill_bonus(k) for k in SKILL_TO_ABILITY}
     passive_perception = 10 + skills["perception"]
 
-    saving_throw_profs, invalid_save_profs = normalize_saving_throw_proficiencies(
-        saving_throw_profs,
-        class_key,
-    )
+    if entity_type != "enemy":
+        saving_throw_profs, invalid_save_profs = normalize_saving_throw_proficiencies(
+            saving_throw_profs,
+            class_key,
+        )
+    else:
+        invalid_save_profs = []
     save_profs = set(saving_throw_profs)
     saving_throws = {}
     for abil in ABILITIES:
@@ -719,11 +909,16 @@ def generate_character(req: GenerateRequest):
             val += pb
         saving_throws[abil] = val
 
-    race_key = canonical_race_key(race)
-    weapon_profs, invalid_weapon_profs = normalize_weapon_proficiencies(weapon_profs, class_key, race_key)
-    armor_profs, invalid_armor_profs = normalize_armor_proficiencies(armor_profs, class_key)
+    if entity_type != "enemy":
+        weapon_profs, invalid_weapon_profs = normalize_weapon_proficiencies(weapon_profs, class_key, race_key)
+        armor_profs, invalid_armor_profs = normalize_armor_proficiencies(armor_profs, class_key)
+        features, feature_corrections = normalize_features_for_build(features, class_key, subclass)
+    else:
+        invalid_weapon_profs = []
+        invalid_armor_profs = []
+        feature_corrections = []
 
-    spell_ability = ((CLASS_RULES.get(class_key) or {}).get("spellcasting") or {}).get("ability")
+    spell_ability = (spellcasting_profile(class_key, subclass) or {}).get("ability")
     spell_save_dc = None
     spell_attack_bonus = None
     if spell_ability:
@@ -736,34 +931,130 @@ def generate_character(req: GenerateRequest):
         small_races = {"gnome", "halfling"}
         size = "Small" if (race or "").lower() in small_races else "Medium"
 
-    hp, hp_provenance = compute_hit_points(class_key, level, stats_norm["CON"], parsed_hp=parsed.get("hp"))
-    ac, ac_provenance = compute_armor_class(
-        class_key,
-        parsed.get("subclass") or "",
-        stats_norm,
-        equipment,
-        parsed_ac=parsed.get("ac"),
-    )
-    spell_issues, normalized_spells, spell_capacity = validate_spells(
-        spells,
-        class_key,
-        level,
-        ability_mod(stats_norm[spell_ability]) if spell_ability else 0,
-    )
-    if normalized_spells:
-        spells = normalized_spells
+    if entity_type == "enemy":
+        hp = coerce_int(parsed.get("hp")) or hp
+        hp_provenance = {"source": "model", "reason": "enemy output"}
+        ac = coerce_int(parsed.get("ac")) or ac or 10
+        ac_provenance = {"source": "model", "reason": "enemy output"}
+        spell_issues = []
+        normalized_spells = spells if isinstance(spells, dict) else {}
+        spell_capacity = {"cantrips": 0, "max_spell_level": 0, "non_cantrip_limit": 0, "rule": "noncaster"}
+        used_spell_fallback = False
+        spell_source = False
+    else:
+        hp, hp_provenance = compute_hit_points(class_key, level, stats_norm["CON"], parsed_hp=parsed.get("hp"))
+        ac, ac_provenance = compute_armor_class(
+            class_key,
+            parsed.get("subclass") or "",
+            stats_norm,
+            equipment,
+            parsed_ac=parsed.get("ac"),
+        )
+        spell_issues, normalized_spells, spell_capacity = validate_spells(
+            spells,
+            class_key,
+            level,
+            ability_mod(stats_norm[spell_ability]) if spell_ability else 0,
+            subclass,
+        )
+        if normalized_spells:
+            spells = normalized_spells
+        used_spell_fallback = False
+        spell_source = build_has_spell_source(class_key, subclass, race_key, features)
 
-    post_validation_issues = dedupe(
-        generation["validation_issues"]
-        + [f"invalid skill proficiencies: {', '.join(invalid_skill_profs)}"] * bool(invalid_skill_profs)
-        + [f"invalid saving throw proficiencies: {', '.join(invalid_save_profs)}"] * bool(invalid_save_profs)
-        + [f"invalid weapon proficiencies: {', '.join(map(str, invalid_weapon_profs))}"] * bool(invalid_weapon_profs)
-        + [f"invalid armor proficiencies: {', '.join(map(str, invalid_armor_profs))}"] * bool(invalid_armor_profs)
-        + spell_issues
-    )
+    if entity_type != "enemy" and spell_source and spell_capacity["rule"] != "noncaster":
+        default_spells = generated_fallback_spells_for_build(
+            class_key,
+            subclass,
+            level,
+            ability_mod(stats_norm[spell_ability]) if spell_ability else 0,
+        )
+        if default_spells:
+            merged_spells = {bucket: list(names) for bucket, names in (spells or {}).items()}
+            for bucket, fallback_names in default_spells.items():
+                existing = list(merged_spells.get(bucket) or [])
+                limit = spell_capacity["cantrips"] if bucket == "cantrip" else spell_capacity["non_cantrip_limit"]
+                for fallback_name in fallback_names:
+                    if fallback_name not in existing and len(existing) < limit:
+                        existing.append(fallback_name)
+                if existing:
+                    merged_spells[bucket] = existing
+            fallback_issues, fallback_spells, _ = validate_spells(
+                merged_spells,
+                class_key,
+                level,
+                ability_mod(stats_norm[spell_ability]) if spell_ability else 0,
+                subclass,
+            )
+            pure_default_issues, pure_default_spells, _ = validate_spells(
+                default_spells,
+                class_key,
+                level,
+                ability_mod(stats_norm[spell_ability]) if spell_ability else 0,
+                subclass,
+            )
+
+            candidate_options = []
+            if fallback_spells:
+                candidate_options.append((fallback_issues, fallback_spells))
+            if pure_default_spells:
+                candidate_options.append((pure_default_issues, pure_default_spells))
+
+            if candidate_options:
+                def candidate_rank(item):
+                    issues, spell_dict = item
+                    cantrips, leveled = count_spell_entries(spell_dict)
+                    return (len(issues), -(cantrips + leveled), -leveled)
+
+                best_issues, best_spells = min(candidate_options, key=candidate_rank)
+                if best_spells != spells:
+                    used_spell_fallback = True
+                spells = best_spells
+                spell_issues = best_issues
+
+    correction_notes = []
+    correction_notes.extend(feature_corrections)
+    if used_spell_fallback:
+        correction_notes.append("filled missing subclass spell selections from fallback rules")
+    for racial_feature in default_racial_features(race_key):
+        if racial_feature.lower() not in {str(feature).strip().lower() for feature in features}:
+            features.append(racial_feature)
+            correction_notes.append(f"added default racial feature: {racial_feature}")
+    if not parsed.get("senses"):
+        default_senses = default_racial_senses(race_key)
+        if default_senses:
+            correction_notes.append(f"added default racial senses: {default_senses}")
+    senses = parsed.get("senses") or default_racial_senses(race_key)
+    if invalid_skill_profs:
+        correction_notes.append(f"removed invalid skill proficiencies: {', '.join(invalid_skill_profs)}")
+    if invalid_save_profs:
+        correction_notes.append(f"removed invalid saving throw proficiencies: {', '.join(invalid_save_profs)}")
+    if invalid_weapon_profs:
+        correction_notes.append(f"removed invalid weapon proficiencies: {', '.join(map(str, invalid_weapon_profs))}")
+    if invalid_armor_profs:
+        correction_notes.append(f"removed invalid armor proficiencies: {', '.join(map(str, invalid_armor_profs))}")
+    if parsed.get("hp") is not None and coerce_int(parsed.get("hp")) != hp:
+        correction_notes.append("replaced model hit points with deterministic class calculation")
+    if parsed.get("ac") is not None and coerce_int(parsed.get("ac")) != ac:
+        correction_notes.append("replaced model armor class with deterministic equipment calculation")
+    if normalized_spells and normalized_spells != (parsed.get("spells") or {}):
+        correction_notes.append("normalized spell selections to the validated schema")
+
+    short_blurb = parsed.get("short_blurb")
+    if not isinstance(short_blurb, str) or len([s for s in re.split(r"[.!?]+", short_blurb) if s.strip()]) < 4:
+        short_blurb = build_fallback_blurb(
+            req,
+            race=race,
+            class_name=class_name or "",
+            subclass=subclass,
+            background=background,
+            alignment=alignment,
+            entity_type=entity_type,
+        )
+        correction_notes.append("replaced missing or underspecified short blurb with deterministic fallback text")
 
     sheet_json = {
-        "name": parsed.get("name"),
+        "name": final_name,
         "class": class_name,
         "subclass": parsed.get("subclass"),
         "level": level,
@@ -774,9 +1065,9 @@ def generate_character(req: GenerateRequest):
         "armorClass": ac,
         "speed": speed,
         "size": size,
-        "creature_type": parsed.get("creature_type"),
-        "challenge_rating": parsed.get("challenge_rating"),
-        "senses": parsed.get("senses"),
+        "creature_type": creature_type,
+        "challenge_rating": challenge_rating,
+        "senses": senses,
         "abilities": {
             "str": stats_norm["STR"],
             "dex": stats_norm["DEX"],
@@ -793,7 +1084,7 @@ def generate_character(req: GenerateRequest):
         "languages": languages,
         "features": features,
         "equipment": equipment,
-        "notes": parsed.get("short_blurb"),
+        "notes": short_blurb,
         "gender": gender,
         "age_group": age_group,
         "skills": skills,
@@ -809,20 +1100,62 @@ def generate_character(req: GenerateRequest):
         "armor_class_provenance": ac_provenance,
     }
 
+    final_validation_input = {
+        "name": sheet_json["name"],
+        "race": sheet_json["race"],
+        "class": sheet_json["class"],
+        "subclass": sheet_json["subclass"],
+        "background": sheet_json["background"],
+        "alignment": sheet_json["alignment"],
+        "short_blurb": sheet_json["notes"],
+        "level": sheet_json["level"],
+        "hp": sheet_json["hitPoints"],
+        "ac": sheet_json["armorClass"],
+        "speed": sheet_json["speed"],
+        "size": sheet_json["size"],
+        "creature_type": sheet_json["creature_type"],
+        "challenge_rating": sheet_json["challenge_rating"],
+        "senses": sheet_json["senses"],
+        "equipment": sheet_json["equipment"],
+        "stats": {ability: stats_norm[ability] for ability in ABILITIES},
+        "skill_proficiencies": sheet_json["skill_proficiencies"],
+        "saving_throw_proficiencies": sheet_json["saving_throw_proficiencies"],
+        "weapon_proficiencies": sheet_json["weapon_proficiencies"],
+        "armor_proficiencies": sheet_json["armor_proficiencies"],
+        "features": sheet_json["features"],
+        "spells": sheet_json["spells"],
+    }
+    post_validation_issues = collect_validation_issues(final_validation_input, req)
+
     response = {
         "question": question,
         "answer": raw,
         "parsed": sheet_json,  # normalized values for UI
         "sheet_json": sheet_json,
+        "name": sheet_json.get("name"),
+        "race": sheet_json.get("race"),
+        "class": sheet_json.get("class"),
+        "subclass": sheet_json.get("subclass"),
+        "level": sheet_json.get("level"),
+        "background": sheet_json.get("background"),
+        "alignment": sheet_json.get("alignment"),
+        "hit_points": sheet_json.get("hitPoints"),
+        "armor_class": sheet_json.get("armorClass"),
+        "speed": sheet_json.get("speed"),
+        "spells": sheet_json.get("spells"),
         "used_model": used_model,
         "experimental_mode": generation["experimental_mode"],
         "validation_issues": post_validation_issues,
+        "model_validation_issues": generation["validation_issues"],
+        "correction_notes": dedupe(correction_notes),
         "attempt_count": generation["attempt_count"],
         "attempts": generation["attempts"],
         "retrieved_sources": generation["retrieved_sources"],
     }
     if (req.entity_type or "").lower() == "enemy":
-        response["stat_block"] = build_stat_block(sheet_json)
+        enemy_stat_block = normalize_enemy_stat_block(sheet_json)
+        response["enemy_stat_block"] = enemy_stat_block
+        response["stat_block"] = build_stat_block(enemy_stat_block)
     response["entity_type"] = req.entity_type
     return response
 
@@ -876,6 +1209,81 @@ def build_pdf(sheet: dict) -> bytes:
     return out.getvalue()
 
 
+def normalize_enemy_stat_block(sheet: dict) -> dict:
+    abilities = sheet.get("abilities", {}) or {}
+
+    def fmt_speed(value):
+        try:
+            return f"{int(value)} ft."
+        except Exception:
+            return str(value or "—")
+
+    def split_named_entries(items):
+        named = []
+        for item in items or []:
+            text = str(item or "").strip()
+            if not text:
+                continue
+            if "." in text:
+                name, body = text.split(".", 1)
+                named.append({"name": name.strip(), "text": body.strip()})
+            else:
+                named.append({"name": text, "text": ""})
+        return named
+
+    def normalize_actions(attacks):
+        rows = []
+        for attack in attacks or []:
+            if not isinstance(attack, dict):
+                continue
+            name = str(attack.get("name") or "Attack").strip()
+            bonus = attack.get("attack_bonus")
+            damage = str(attack.get("damage") or "").strip()
+            body = []
+            if bonus is not None:
+                body.append(f"+{bonus} to hit")
+            if damage:
+                body.append(f"Hit: {damage}")
+            rows.append({"name": name, "text": ", ".join(body)})
+        return rows
+
+    spellcasting = {}
+    if sheet.get("spells"):
+        spellcasting = {
+            "ability": sheet.get("spellcasting_ability"),
+            "save_dc": sheet.get("spell_save_dc"),
+            "attack_bonus": sheet.get("spell_attack_bonus"),
+            "spells": sheet.get("spells") or {},
+        }
+
+    return {
+        "name": sheet.get("name", "Unknown Creature"),
+        "size": sheet.get("size") or "Medium",
+        "creature_type": sheet.get("creature_type") or "creature",
+        "alignment": sheet.get("alignment") or "Unaligned",
+        "armor_class": sheet.get("armorClass", "—"),
+        "hit_points": sheet.get("hitPoints", "—"),
+        "speed": fmt_speed(sheet.get("speed")),
+        "abilities": {
+            "STR": abilities.get("str", abilities.get("STR", "—")),
+            "DEX": abilities.get("dex", abilities.get("DEX", "—")),
+            "CON": abilities.get("con", abilities.get("CON", "—")),
+            "INT": abilities.get("int", abilities.get("INT", "—")),
+            "WIS": abilities.get("wis", abilities.get("WIS", "—")),
+            "CHA": abilities.get("cha", abilities.get("CHA", "—")),
+        },
+        "saving_throws": sheet.get("saving_throws") or {},
+        "skills": sheet.get("skills") or {},
+        "skill_proficiencies": sheet.get("skill_proficiencies") or [],
+        "senses": sheet.get("senses") or "",
+        "languages": sheet.get("languages") or [],
+        "challenge_rating": sheet.get("challenge_rating") or "",
+        "traits": split_named_entries(sheet.get("features") or []),
+        "actions": normalize_actions(sheet.get("attacks") or []),
+        "spellcasting": spellcasting,
+    }
+
+
 def build_stat_block(sheet: dict) -> str:
     def mod(score: int) -> str:
         try:
@@ -884,41 +1292,46 @@ def build_stat_block(sheet: dict) -> str:
             return "+0"
         return f"{(val - 10) // 2:+d}"
 
-    name = sheet.get("name", "Unknown Creature")
-    size = sheet.get("size") or "Medium"
-    creature_type = sheet.get("creature_type") or sheet.get("subclass") or sheet.get("class") or "creature"
-    alignment = sheet.get("alignment") or "Unaligned"
-    ac = sheet.get("armorClass", "—")
-    hp = sheet.get("hitPoints", "—")
-    speed = sheet.get("speed", "—")
+    block = sheet if "armor_class" in sheet else normalize_enemy_stat_block(sheet)
+    name = block.get("name", "Unknown Creature")
+    size = block.get("size") or "Medium"
+    creature_type = block.get("creature_type") or "creature"
+    alignment = block.get("alignment") or "Unaligned"
+    ac = block.get("armor_class", "—")
+    hp = block.get("hit_points", "—")
+    speed = block.get("speed", "—")
 
-    abilities = sheet.get("abilities", {}) or {}
+    abilities = block.get("abilities", {}) or {}
     abil_line = "  ".join(
-        f"{k} {abilities.get(k.lower(), abilities.get(k, '—'))} ({mod(abilities.get(k.lower(), abilities.get(k, 10)))})"
+        f"{k} {abilities.get(k, '—')} ({mod(abilities.get(k, 10))})"
         for k in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
     )
 
-    saving = sheet.get("saving_throw_proficiencies") or []
-    skills = sheet.get("skill_proficiencies") or []
-    senses = sheet.get("senses") or ""
-    languages = sheet.get("languages") or []
-    cr = sheet.get("challenge_rating") or ""
+    saving = block.get("saving_throws") or {}
+    skills = block.get("skills") or {}
+    skill_profs = set(block.get("skill_proficiencies") or [])
+    senses = block.get("senses") or ""
+    languages = block.get("languages") or []
+    cr = block.get("challenge_rating") or ""
 
     lines = [
         name,
         f"{size} {creature_type}, {alignment}",
         f"Armor Class {ac}",
         f"Hit Points {hp}",
-        f"Speed {speed} ft.",
+        f"Speed {speed}",
         "",
         abil_line,
         "",
     ]
 
     if saving:
-        lines.append(f"Saving Throws {', '.join(saving)}")
-    if skills:
-        lines.append(f"Skills {', '.join(skills)}")
+        save_parts = [f"{abil} {bonus:+d}" for abil, bonus in saving.items()]
+        lines.append(f"Saving Throws {', '.join(save_parts)}")
+    if skills and skill_profs:
+        skill_parts = [f"{skill} {int(skills.get(skill, 0)):+d}" for skill in skill_profs if skill in skills]
+        if skill_parts:
+            lines.append(f"Skills {', '.join(skill_parts)}")
     if senses:
         lines.append(f"Senses {senses}")
     if languages:
@@ -926,36 +1339,46 @@ def build_stat_block(sheet: dict) -> str:
     if cr:
         lines.append(f"Challenge {cr}")
 
-    traits = sheet.get("features") or []
-    attacks = sheet.get("attacks") or []
-    spells = sheet.get("spells") or {}
+    traits = block.get("traits") or []
+    actions = block.get("actions") or []
+    spellcasting = block.get("spellcasting") or {}
 
     if traits:
         lines.append("")
         lines.append("Traits")
         for t in traits:
-            lines.append(f"- {t}")
+            if t.get("text"):
+                lines.append(f"- {t['name']}. {t['text']}")
+            else:
+                lines.append(f"- {t['name']}")
 
-    if spells:
+    if spellcasting.get("spells"):
         lines.append("")
         lines.append("Spellcasting")
-        for lvl, names in spells.items():
+        ability = spellcasting.get("ability")
+        save_dc = spellcasting.get("save_dc")
+        atk_bonus = spellcasting.get("attack_bonus")
+        header_bits = []
+        if ability:
+            header_bits.append(f"Ability {ability}")
+        if save_dc is not None:
+            header_bits.append(f"Save DC {save_dc}")
+        if atk_bonus is not None:
+            header_bits.append(f"Spell Attack {atk_bonus:+d}")
+        if header_bits:
+            lines.append(", ".join(header_bits))
+        for lvl, names in spellcasting["spells"].items():
             label = "Cantrips" if str(lvl).lower() in {"0", "cantrip", "cantrips"} else f"Level {lvl}"
             lines.append(f"{label}: {', '.join(names)}")
 
-    if attacks:
+    if actions:
         lines.append("")
         lines.append("Actions")
-        for a in attacks:
-            name = a.get("name", "Attack")
-            bonus = a.get("attack_bonus")
-            dmg = a.get("damage")
-            parts = [name]
-            if bonus is not None:
-                parts.append(f"+{bonus}")
-            if dmg:
-                parts.append(f"({dmg})")
-            lines.append("- " + " ".join(parts))
+        for a in actions:
+            if a.get("text"):
+                lines.append(f"- {a['name']}. {a['text']}")
+            else:
+                lines.append(f"- {a['name']}")
 
     return "\n".join(lines)
 
@@ -1027,7 +1450,8 @@ def health():
     """Simple health check."""
     return {
         "status": "ok",
-        "index_loaded": retriever is not None,
+        "index_loaded": retriever_mode in {"vector_index", "markdown_fallback"},
+        "retriever_mode": retriever_mode,
         "model": HF_MODEL_CANDIDATES[0] if HF_MODEL_CANDIDATES else HF_MODEL,
         "candidate_models": HF_MODEL_CANDIDATES,
     }

@@ -64,6 +64,20 @@ def empty_scores():
     return row
 
 
+def join_items(value):
+    if isinstance(value, list):
+        return "; ".join(str(v) for v in value if str(v).strip())
+    return str(value or "")
+
+
+def count_items(value):
+    if isinstance(value, list):
+        return len([v for v in value if str(v).strip()])
+    text = str(value or "").strip()
+    if not text:
+        return 0
+    return len([part for part in text.split(";") if part.strip()])
+
 
 def numeric_stats(rows, group_key=None):
     grouped = defaultdict(list)
@@ -173,6 +187,12 @@ def main():
                     "model": "",
                     "attempt_count": "",
                     "validation_issues": "",
+                    "validation_issue_count": "",
+                    "model_validation_issues": "",
+                    "model_validation_issue_count": "",
+                    "correction_notes": "",
+                    "correction_count": "",
+                    "retrieved_sources_count": "",
                     "raw_output_path": "",
                     "parsed_output_path": "",
                 }
@@ -192,7 +212,13 @@ def main():
                     row["name"] = parsed.get("name", "")
                     row["model"] = data.get("used_model") or data.get("model") or ""
                     row["attempt_count"] = data.get("attempt_count", "")
-                    row["validation_issues"] = "; ".join(data.get("validation_issues") or [])
+                    row["validation_issues"] = join_items(data.get("validation_issues"))
+                    row["validation_issue_count"] = count_items(data.get("validation_issues"))
+                    row["model_validation_issues"] = join_items(data.get("model_validation_issues"))
+                    row["model_validation_issue_count"] = count_items(data.get("model_validation_issues"))
+                    row["correction_notes"] = join_items(data.get("correction_notes"))
+                    row["correction_count"] = count_items(data.get("correction_notes"))
+                    row["retrieved_sources_count"] = len(data.get("retrieved_sources") or [])
                     raw_output_path = os.path.join(out_dir, f"{row['id']}_raw.txt")
                     parsed_output_path = os.path.join(out_dir, f"{row['id']}_parsed.json")
                     with open(raw_output_path, "w", encoding="utf-8") as f:
@@ -224,6 +250,12 @@ def main():
         "model",
         "attempt_count",
         "validation_issues",
+        "validation_issue_count",
+        "model_validation_issues",
+        "model_validation_issue_count",
+        "correction_notes",
+        "correction_count",
+        "retrieved_sources_count",
         "raw_output_path",
         "parsed_output_path",
         "sense",

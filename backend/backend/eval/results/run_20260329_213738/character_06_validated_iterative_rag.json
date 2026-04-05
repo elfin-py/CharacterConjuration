@@ -1,0 +1,21 @@
+{
+  "prompt_id": "character_06",
+  "entity_type": "character",
+  "condition": "validated_iterative_rag",
+  "payload": {
+    "entity_type": "character",
+    "roll_mode": "auto",
+    "experimental_mode": "validated_iterative_rag",
+    "race": "Halfling",
+    "dnd_class": "Rogue",
+    "level": 8,
+    "alignment": "Chaotic Good",
+    "concept": "A nimble infiltrator with a strict moral code, strong social skills, and a habit of leaving mocking calling cards behind.",
+    "gender": null,
+    "age_group": null,
+    "manual_rolls": null,
+    "ability_assignment": null
+  },
+  "status": 0,
+  "response": "<urlopen error [Errno 1] Operation not permitted>"
+}

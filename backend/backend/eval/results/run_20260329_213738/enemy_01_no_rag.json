@@ -1,0 +1,21 @@
+{
+  "prompt_id": "enemy_01",
+  "entity_type": "enemy",
+  "condition": "no_rag",
+  "payload": {
+    "entity_type": "enemy",
+    "roll_mode": "auto",
+    "experimental_mode": "no_rag",
+    "race": "Goblin",
+    "dnd_class": "Sorcerer",
+    "level": 5,
+    "alignment": "Chaotic Evil",
+    "concept": "A goblin fire-mage raider who relies on mobility, reckless spell use, and intimidation.",
+    "gender": null,
+    "age_group": null,
+    "manual_rolls": null,
+    "ability_assignment": null
+  },
+  "status": 0,
+  "response": "<urlopen error [Errno 1] Operation not permitted>"
+}

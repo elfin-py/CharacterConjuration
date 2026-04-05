@@ -1,0 +1,21 @@
+{
+  "prompt_id": "character_05",
+  "entity_type": "character",
+  "condition": "validated_iterative_rag",
+  "payload": {
+    "entity_type": "character",
+    "roll_mode": "auto",
+    "experimental_mode": "validated_iterative_rag",
+    "race": "Dwarf",
+    "dnd_class": "Cleric",
+    "level": 12,
+    "alignment": "Lawful Good",
+    "concept": "A veteran temple healer whose magic is practical, disciplined, and shaped by years of plague relief work.",
+    "gender": null,
+    "age_group": null,
+    "manual_rolls": null,
+    "ability_assignment": null
+  },
+  "status": 0,
+  "response": "<urlopen error [Errno 1] Operation not permitted>"
+}
