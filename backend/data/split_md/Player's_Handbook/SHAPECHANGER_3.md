@@ -1,0 +1,11 @@
+# Shapechanger
+
+At 10th levei, you add the polymorph spell to your
+spellbook, if it is not there already. Vou can cast
+polymorph without expending a spell slot. When you
+do so, you can target only yourself and transform
+into a
+beast whose challenge rating is 1 or lower.
+Once you cast polymorph in this way, you can't do so
+again until you finish a short or long rest, though you
+can still cast it normally using an available spell slot.

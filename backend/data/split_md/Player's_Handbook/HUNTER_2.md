@@ -1,0 +1,12 @@
+# Hunter
+
+Emulating the Hunter archetype means accepting your
+place as a bulwark between civilization and the terrors
+of the wilderness.
+As you walk the Hunter's path, you
+learn specialized
+techniques
+for fighting the threats
+you face, from rampaging
+ogres and hordes of ores to
+towering giants and terrifying dragons.

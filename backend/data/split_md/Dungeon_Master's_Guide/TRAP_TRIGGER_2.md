@@ -1,0 +1,15 @@
+# Trap Trigger
+
+d6 
+Trigger 
+Stepped on (floor, stairs) 
+2 
+Moved through (doorway, hallway) 
+3 
+Touched (doorknob, statue) 
+4 
+Opened (door, treasure chest) 
+5 
+Looked at (mural, arcane symbol) 
+6 
+Moved (cart, stone block)

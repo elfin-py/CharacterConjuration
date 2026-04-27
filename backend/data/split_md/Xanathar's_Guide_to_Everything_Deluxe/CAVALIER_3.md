@@ -1,0 +1,11 @@
+# Cavalier
+
+The archetypal Cavalier excels at mounted combat. 
+Usua lly born among the nobility and raised at court, a 
+Cavalier is equally at home leading a cavalry charge or 
+exchanging repartee at a state dinner. Cavaliers also 
+learn how to guard those in their charge from harm, 
+often serving as the protectors of their superiors and of 
+the weak. Compelled to right wrongs or earn prestige, 
+many of these fighters leave their lives of comfort to em-
+bark on glorious adventure.

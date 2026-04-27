@@ -10,15 +10,9 @@ from statistics import mean
 from typing import Any
 
 from ragas import EvaluationDataset, evaluate
-from ragas.embeddings import GoogleEmbeddings, embedding_factory
+from ragas.embeddings import GoogleEmbeddings, HuggingFaceEmbeddings, embedding_factory
 from ragas.llms import llm_factory
-from ragas.metrics import (
-    answer_correctness,
-    answer_relevancy,
-    context_precision,
-    context_recall,
-    faithfulness,
-)
+from ragas.metrics import answer_correctness, answer_relevancy, context_precision, context_recall, faithfulness
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REFERENCES = ROOT / "eval" / "dissertation_references.json"
 DEFAULT_PROMPTS = ROOT / "eval" / "dissertation_prompts.json"
@@ -184,6 +178,28 @@ def build_judge_models():
         or os.getenv("GOOGLE_API_KEY")
     )
     openai_api_key = os.getenv("RAGAS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    hf_api_key = os.getenv("RAGAS_HF_TOKEN") or os.getenv("HF_TOKEN")
+
+    if provider in {"hf", "huggingface", "huggingface_hub", "hf-inference"}:
+        if not hf_api_key:
+            raise RuntimeError("Set HF_TOKEN or RAGAS_HF_TOKEN before running Hugging Face RAGAS evaluation.")
+
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError("openai package is required for Hugging Face OpenAI-compatible chat evaluation.") from exc
+
+        llm_model = os.getenv("RAGAS_EVAL_MODEL", "Qwen/Qwen2.5-7B-Instruct-1M:hf-inference")
+        embedding_model = os.getenv("RAGAS_EMBED_MODEL", "intfloat/multilingual-e5-large")
+        base_url = os.getenv("RAGAS_HF_BASE_URL", "https://router.huggingface.co/v1")
+        client = OpenAI(api_key=hf_api_key, base_url=base_url)
+        llm = llm_factory(llm_model, provider="openai", client=client)
+        embeddings = HuggingFaceEmbeddings(
+            model=embedding_model,
+            use_api=True,
+            api_key=hf_api_key,
+        )
+        return llm, embeddings
 
     if provider in {"google", "gemini"} or (not provider and google_api_key):
         if not google_api_key:
@@ -222,15 +238,18 @@ def build_judge_models():
     )
 
 
-def evaluate_samples(samples: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+METRIC_REGISTRY = {
+    "faithfulness": faithfulness,
+    "answer_relevancy": answer_relevancy,
+    "context_precision": context_precision,
+    "context_recall": context_recall,
+    "answer_correctness": answer_correctness,
+}
+
+
+def evaluate_samples(samples: list[dict[str, Any]], metric_names: list[str]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     llm, embeddings = build_judge_models()
-    metrics = [
-        copy.deepcopy(faithfulness),
-        copy.deepcopy(answer_relevancy),
-        copy.deepcopy(context_precision),
-        copy.deepcopy(context_recall),
-        copy.deepcopy(answer_correctness),
-    ]
+    metrics = [copy.deepcopy(METRIC_REGISTRY[name]) for name in metric_names]
     for metric in metrics:
         if hasattr(metric, "llm"):
             metric.llm = llm
@@ -307,6 +326,13 @@ def main() -> int:
     parser.add_argument("run_dir", help="Path to backend/eval/results/run_YYYYMMDD_HHMMSS")
     parser.add_argument("--prompts", default=str(DEFAULT_PROMPTS), help="Prompt set JSON used to create the benchmark")
     parser.add_argument("--references", default=str(DEFAULT_REFERENCES), help="Reference text JSON keyed by prompt_id")
+    parser.add_argument(
+        "--metrics",
+        nargs="+",
+        default=list(METRIC_REGISTRY.keys()),
+        choices=list(METRIC_REGISTRY.keys()),
+        help="Subset of RAGAS metrics to run. Defaults to all implemented metrics.",
+    )
     args = parser.parse_args()
 
     run_dir = Path(args.run_dir).resolve()
@@ -322,13 +348,14 @@ def main() -> int:
         json.dump(samples, handle, indent=2)
 
     try:
-        per_sample, summary = evaluate_samples(samples)
+        per_sample, summary = evaluate_samples(samples, args.metrics)
     except Exception as exc:
         summary = {
             "status": "not_configured",
             "error": str(exc),
             "sample_count": len(samples),
             "dataset_preview": str(dataset_preview_path),
+            "requested_metrics": args.metrics,
             "notes": [
                 "RAGAS is installed, but an evaluator model is not configured.",
                 "Set OPENAI_API_KEY or RAGAS_OPENAI_API_KEY before running this script.",

@@ -1,0 +1,6 @@
+# MORDENKAINEN PRESENTS
+
+_Source: Monsters of the Multiverse.pdf, page 2_
+
+MORDENKAINEN PRESENTS 
+MONSTERS OF THE MULTIVERSE .

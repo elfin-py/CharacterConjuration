@@ -1,0 +1,27 @@
+# Primal Instinct
+
+People of towns and cities take pride in how their
+civilized ways set them apart from animaIs, as if
+denying one's own nature was a mark of superiority. To
+a barbarian,
+though, civilization is no virtue, but a sign
+of weakness.
+The strong embrace their animal nature-
+keen instincts, primaI physicality, and ferocious rage.
+Barbarians
+are uncomfortable
+when hedged in by walls
+and crowds. They thrive in the wilds of their homelands:
+the tundra, jungle, or grasslands
+where their tribes
+live and hunt.
+Barbarians
+come alive in the chaos of combat.
+They can enter a berserk state where rage takes over,
+giving them superhuman
+strength
+and resilience. A
+barbarian
+can draw on this reservoir of fury only a few
+times without resting, but those few rages are usually
+sufficient to defeat whatever threats arise.

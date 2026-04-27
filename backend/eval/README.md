@@ -14,10 +14,14 @@ The default dissertation run uses `10 prompts x 3 conditions = 30 outputs` with 
 
 - `backend/eval/dissertation_prompts.json` - reduced 10-prompt benchmark set
 - `backend/eval/prompts.json` - larger prompt pool retained from earlier prototype work
+- `backend/eval/large_scale_prompts.json` - explicit 30-prompt larger-scale benchmark set (10 character, 10 NPC, 10 enemy)
 - `backend/eval/benchmark_run.py` - runs all requested conditions and writes artifacts
 - `backend/eval/summarize_results.py` - computes condition-level score and failure summaries from the scored CSV
 - `backend/eval/dissertation_references.json` - benchmark reference texts for RAGAS-assisted scoring
+- `backend/eval/large_scale_references.json` - generated reference texts for the larger-scale prompt set
+- `backend/eval/build_reference_texts.py` - generates simple reference texts from a prompt file
 - `backend/eval/ragas_eval.py` - converts a saved run into a RAGAS dataset and scores it
+- `backend/eval/analyze_ragas_alignment.py` - compares RAGAS metrics against manual rubric scores
 
 ## Output structure
 
@@ -48,6 +52,16 @@ python backend/eval/benchmark_run.py \
   --backend http://127.0.0.1:8000 \
   --prompts backend/eval/dissertation_prompts.json \
   --out backend/eval/results/run_custom \
+  --conditions no_rag rag validated_iterative_rag
+```
+
+For a larger supplementary run:
+
+```bash
+python backend/eval/benchmark_run.py \
+  --backend http://127.0.0.1:8000 \
+  --prompts backend/eval/large_scale_prompts.json \
+  --out backend/eval/results/run_large_scale \
   --conditions no_rag rag validated_iterative_rag
 ```
 
@@ -97,6 +111,21 @@ Then run:
 python backend/eval/ragas_eval.py backend/eval/results/run_YYYYMMDD_HHMMSS
 ```
 
+To keep cost and latency down, you can run only the cheaper retrieval-oriented metrics:
+
+```bash
+python backend/eval/ragas_eval.py backend/eval/results/run_YYYYMMDD_HHMMSS \
+  --metrics answer_relevancy context_precision context_recall
+```
+
+For the larger prompt set, point RAGAS at the matching references:
+
+```bash
+python backend/eval/ragas_eval.py backend/eval/results/run_large_scale \
+  --prompts backend/eval/large_scale_prompts.json \
+  --references backend/eval/large_scale_references.json
+```
+
 This writes:
 - `ragas_dataset_preview.json`
 - `ragas_summary.json`
@@ -105,14 +134,26 @@ This writes:
 Expected environment:
 - preferred: `GOOGLE_API_KEY`, `GEMINI_API_KEY`, or `RAGAS_GOOGLE_API_KEY`
 - fallback: `OPENAI_API_KEY` or `RAGAS_OPENAI_API_KEY`
+- alternative: `HF_TOKEN` or `RAGAS_HF_TOKEN` with `RAGAS_EVAL_PROVIDER=hf`
 - optional `RAGAS_EVAL_PROVIDER` (`google` / `gemini` / `openai`)
 - optional `RAGAS_EVAL_MODEL`
 - optional `RAGAS_EMBED_MODEL`
 - optional `RAGAS_OPENAI_BASE_URL` for compatible OpenAI-style providers
+- optional `RAGAS_HF_BASE_URL` (defaults to `https://router.huggingface.co/v1`)
 
 Default evaluator models:
 - Gemini: `gemini-2.5-flash` + `gemini-embedding-001`
 - OpenAI: `gpt-4o-mini` + `text-embedding-3-small`
+- Hugging Face: `Qwen/Qwen2.5-7B-Instruct-1M:hf-inference` + `intfloat/multilingual-e5-large`
+
+Example Hugging Face configuration:
+
+```bash
+export RAGAS_EVAL_PROVIDER=hf
+export HF_TOKEN=...
+export RAGAS_EVAL_MODEL=Qwen/Qwen2.5-7B-Instruct-1M:hf-inference
+export RAGAS_EMBED_MODEL=intfloat/multilingual-e5-large
+```
 
 The implemented RAGAS metrics are:
 - `faithfulness`
@@ -123,8 +164,23 @@ The implemented RAGAS metrics are:
 
 Use these as retrieval diagnostics. They do not replace the manual `rules_fit` score for D&D legality.
 
-## Notes for the dissertation
+## Compare RAGAS to the manual rubric
 
-- Use `validated iterative RAG` as the dissertation term for the third condition.
-- Keep the existing prototype dataset separate from this final comparative run.
-- The annotated human-authored character sheet should be treated as a supporting case study rather than part of the main benchmark CSV.
+Once a run has both:
+- manual `sense`, `rules_fit`, and `style` scores
+- `ragas_dataset_preview.json` and `ragas_per_sample.json`
+
+run:
+
+```bash
+python backend/eval/analyze_ragas_alignment.py backend/eval/results/run_YYYYMMDD_HHMMSS
+```
+
+This writes `ragas_alignment_summary.json` with:
+- Pearson and Spearman correlations between each manual rubric dimension and each RAGAS metric
+- per-condition breakdowns
+
+Interpret these as calibration diagnostics only. The intended dissertation use is:
+- manual rubric = domain-valid human evaluation
+- deterministic validation = rule-specific mechanical checking
+- RAGAS = retrieval/grounding diagnostics at scale

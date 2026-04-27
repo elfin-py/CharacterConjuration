@@ -5,6 +5,7 @@ Fill the official 5E character sheet PDF using page-aware field mapping.
 from typing import Any, Dict
 from pathlib import Path
 import re
+import io
 
 from PyPDF2 import PdfReader, PdfWriter
 from PyPDF2.generic import NameObject
@@ -12,6 +13,29 @@ from PyPDF2.generic import NameObject
 from rules_data import ABILITIES, CLASS_RULES, SKILL_TO_ABILITY, ability_mod, canonical_class_key, prof_bonus
 
 PDF_TEMPLATE = Path(__file__).resolve().parent / "data" / "pdf" / "5E_CharacterSheet_Fillable.pdf"
+
+
+def _compact_text(value: Any, max_chars: int) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= max_chars:
+        return text
+    clipped = text[: max_chars - 3].rstrip()
+    if " " in clipped:
+        clipped = clipped.rsplit(" ", 1)[0]
+    return clipped + "..."
+
+
+def _join_lines(items: list[str], max_chars: int) -> str:
+    text = "\n".join(item for item in items if item)
+    return _compact_text(text, max_chars)
+
+
+def _first_sentence(value: Any, max_chars: int) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not text:
+        return ""
+    parts = re.split(r"(?<=[.!?])\s+", text, maxsplit=1)
+    return _compact_text(parts[0], max_chars)
 
 
 def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
@@ -129,6 +153,7 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
         class_level += f" ({subclass})"
     if sheet_json.get("level"):
         class_level += f" {sheet_json.get('level')}"
+    class_level = _compact_text(class_level, 28)
 
     def dedupe(items):
         out = []
@@ -156,13 +181,13 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
     if languages:
         prof_lines.append(f"Languages: {', '.join(languages)}")
 
-    set_field("CharacterName", sheet_json.get("name", ""))
-    set_field("CharacterName 2", sheet_json.get("name", ""))
-    set_field("Race ", sheet_json.get("race", ""))
-    set_field("Alignment", sheet_json.get("alignment", ""))
-    set_field("Background", sheet_json.get("background", ""))
+    set_field("CharacterName", _compact_text(sheet_json.get("name", ""), 28))
+    set_field("CharacterName 2", _compact_text(sheet_json.get("name", ""), 28))
+    set_field("Race ", _compact_text(sheet_json.get("race", ""), 18))
+    set_field("Alignment", _compact_text(sheet_json.get("alignment", ""), 18))
+    set_field("Background", _compact_text(sheet_json.get("background", ""), 18))
     set_field("ClassLevel", class_level.strip())
-    set_field("Age", sheet_json.get("age_group", ""))
+    set_field("Age", _compact_text(sheet_json.get("age_group", ""), 12))
 
     for ability in ABILITIES:
         lower = ability.lower()
@@ -257,15 +282,17 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
         check_box(skill_check_map[skill_name], skill_name in skill_prof_set)
 
     set_field("Passive", sheet_json.get("passive_perception", ""))
-    set_field("ProficienciesLang", "\n".join(prof_lines))
+    set_field("ProficienciesLang", _join_lines(prof_lines, 260))
     feature_lines = list(sheet_json.get("features", []) or [])
     senses_text = str(sheet_json.get("senses") or "").strip()
     senses_text = re.sub(r",?\s*passive perception\s+\d+", "", senses_text, flags=re.IGNORECASE).strip(" ,")
     if senses_text:
         feature_lines.append(f"Senses: {senses_text}")
-    set_field("Features and Traits", "\n".join(feature_lines))
-    set_field("Equipment", "\n".join(sheet_json.get("equipment", []) or []))
-    set_field("Backstory", sheet_json.get("notes", ""))
+    set_field("Features and Traits", _join_lines(feature_lines, 420))
+    set_field("Equipment", _join_lines(list(sheet_json.get("equipment", []) or []), 260))
+    notes_text = _compact_text(sheet_json.get("notes", ""), 240)
+    short_notes = _first_sentence(sheet_json.get("notes", ""), 110)
+    set_field("Backstory", notes_text)
 
     attacks = sheet_json.get("attacks") or []
     attack_names = [attack.get("name", "") for attack in attacks[:3]]
@@ -290,7 +317,7 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
         label = "Cantrips" if str(level_key).lower() in {"0", "cantrip", "cantrips"} else f"Level {level_key}"
         spell_lines.append(f"{label}: {', '.join(names)}")
     if spell_lines:
-        set_field("Feat+Traits", "\n".join(spell_lines))
+        set_field("Feat+Traits", _join_lines(spell_lines, 320))
 
     if sheet_json.get("spellcasting_ability"):
         set_field("Spellcasting Class 2", class_name)
@@ -309,13 +336,12 @@ def fill_pdf(sheet_json: Dict[str, Any]) -> bytes:
                 for checkbox_name in checkbox_sections[bucket][: len(names)]:
                     check_box(checkbox_name, True)
 
-    set_field("PersonalityTraits ", sheet_json.get("notes", ""))
-    set_field("Ideals", sheet_json.get("alignment", ""))
-    set_field("Bonds", sheet_json.get("background", ""))
+    set_field("PersonalityTraits ", short_notes)
+    set_field("Ideals", _compact_text(sheet_json.get("alignment", ""), 40))
+    set_field("Bonds", _compact_text(sheet_json.get("background", ""), 40))
     set_field("Flaws", "")
 
     writer.set_need_appearances_writer()
-    import io
 
     bio = io.BytesIO()
     writer.write(bio)

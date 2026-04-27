@@ -1,0 +1,16 @@
+# Toll The Dea D
+
+Necromancy can trip 
+Casting Time: l action 
+Range: 60 feet 
+Components: V, S 
+Duration: Instantaneous 
+You point at one creature you can see within range, 
+and the sound of a dolorous bell fills the air around it 
+for a moment. The target must s ucceed on a Wisdom 
+saving throw or take ld8 necrotic damage. If the target 
+is missing a ny of its hit points, it instead takes ldl2 ne-
+crotic damage. 
+The spell's damage increases by one die when you 
+reach 5th level (2d8 or 2dl2), 11th level (3d8 or 3d12), 
+and 17th level (4d8 or 4d12).

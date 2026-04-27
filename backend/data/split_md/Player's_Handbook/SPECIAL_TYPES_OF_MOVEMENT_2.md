@@ -1,0 +1,6 @@
+# Special Types Of Movement
+
+Movement through dangerous dungeons or wilderness
+areas often involves more than simply walking.
+Adventurers might have to climb, crawl. swim, or jump
+to get where they need to go.

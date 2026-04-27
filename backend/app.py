@@ -438,21 +438,55 @@ def parse_model_json(raw: str):
 def build_fallback_blurb(req: GenerateRequest, *, race: str, class_name: str, subclass: str, background: str, alignment: str, entity_type: str) -> str:
     concept = (req.concept or "a memorable role in the setting").strip().rstrip(".")
     if entity_type == "enemy":
+        role_bits = " ".join(part for part in [subclass, class_name] if part).strip().lower() or "threat"
+        race_text = race.lower() if race else "creature"
+        alignment_text = alignment.lower() if alignment else "unpredictable"
         parts = [
-            f"This {race.lower() if race else 'creature'} threat is framed around {concept}.",
-            f"It is presented as a {alignment.lower()} {subclass.lower() + ' ' if subclass else ''}{class_name.lower() if class_name else 'enemy'} with a clear battlefield identity.",
-            "Its traits and actions are intended to read like a compact 5e stat block rather than a player-character sheet.",
-            "The result favors immediate table use, with concrete combat flavor and a distinct encounter role.",
+            f"This {race_text} {role_bits} is feared for {concept.lower()}.",
+            f"It carries itself with the ruthless confidence of a {alignment_text} foe, pressing every advantage once battle begins.",
+            "Those who face it quickly learn that its methods are direct, dangerous, and designed to throw disciplined opponents off balance.",
+            "Even before steel is drawn, it gives the impression of a threat built to dominate a scene rather than merely occupy it.",
         ]
     else:
         role = f"{subclass} {class_name}".strip() if subclass else class_name
-        parts = [
-            f"This {race.lower() if race else 'character'} {role.lower() if role else 'adventurer'} is built around {concept}.",
-            f"The background of {background.lower() if background else 'an uncertain past'} shapes how they approach danger, allies, and responsibility.",
-            f"The characterization aims for a {alignment.lower()} tone with enough specificity to support role-play at the table.",
-            "The final build is written to feel mechanically grounded while still leaving room for player interpretation and growth.",
-        ]
+        race_text = race.lower() if race else "adventurer"
+        role_text = role.lower() if role else "adventurer"
+        background_text = background.lower() if background else "an uncertain past"
+        alignment_text = alignment.lower() if alignment else "uncertain"
+        if entity_type == "npc":
+            parts = [
+                f"A {race_text} {role_text} shaped by life as a {background_text}, they are best known for {concept.lower()}.",
+                f"They speak and act with the wary confidence of a {alignment_text} figure who has learned to survive by reading people quickly.",
+                "There is enough competence in their manner to make them useful immediately, but enough reserve to suggest motives and loyalties that are not obvious at first glance.",
+                "As an NPC, they come across as someone with a clear place in the setting rather than a bundle of disconnected traits.",
+            ]
+        else:
+            parts = [
+                f"A {race_text} {role_text} shaped by {background_text}, they have built their life around {concept.lower()}.",
+                f"They carry themselves with the conviction of a {alignment_text} adventurer, meeting danger with discipline, instinct, and a clear sense of purpose.",
+                "Years of hardship and training have given them a distinct presence, whether that appears as quiet resolve, sharp wit, or an edge that never fully softens.",
+                "Taken together, they read as a person with a history, a role, and enough unfinished tension to support play beyond a single encounter.",
+            ]
     return " ".join(parts)
+
+
+def harmonize_blurb_name(blurb: str, original_name: str, final_name: str) -> str:
+    if not isinstance(blurb, str):
+        return blurb
+    original_name = str(original_name or "").strip()
+    final_name = str(final_name or "").strip()
+    if not original_name or not final_name or original_name == final_name:
+        return blurb
+
+    updated = re.sub(rf"\b{re.escape(original_name)}\b", final_name, blurb)
+
+    original_first = original_name.split()[0] if original_name.split() else ""
+    final_first = final_name.split()[0] if final_name.split() else ""
+    if original_first and final_first and original_first != final_first:
+        updated = re.sub(rf"\b{re.escape(original_first)}\b", final_first, updated)
+        updated = re.sub(rf"\b{re.escape(original_first)}'s\b", f"{final_first}'s", updated)
+
+    return updated
 
 
 def count_spell_entries(spells: dict) -> tuple[int, int]:
@@ -844,7 +878,7 @@ def generate_character(req: GenerateRequest):
     race_key = canonical_race_key(race)
     model_name = str(parsed.get("name") or "").strip()
     generated_name = generate_diverse_name(race_key)
-    final_name = generated_name if not model_name or len(model_name.split()) < 2 else generated_name
+    final_name = model_name if model_name and len(model_name.split()) >= 2 else generated_name
     proficiencies = parsed.get("proficiencies") or []
     skill_profs = parsed.get("skill_proficiencies") or []
     saving_throw_profs = parsed.get("saving_throw_proficiencies") or []
@@ -1052,6 +1086,8 @@ def generate_character(req: GenerateRequest):
             entity_type=entity_type,
         )
         correction_notes.append("replaced missing or underspecified short blurb with deterministic fallback text")
+
+    short_blurb = harmonize_blurb_name(short_blurb, model_name, final_name)
 
     sheet_json = {
         "name": final_name,
