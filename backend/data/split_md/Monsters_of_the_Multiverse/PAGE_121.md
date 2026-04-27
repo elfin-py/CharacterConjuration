@@ -1,0 +1,117 @@
+# REGIONAL EFFECTS
+
+_Source: Monsters of the Multiverse.pdf, page 121_
+
+REGIONAL EFFECTS 
+The territory within 5 miles of an elder brain is al-
+tered by the creature 's psionic presence, which cre-
+ates one or more of the following effects: 
+Paranoia. Creatures within 5 miles of an elder 
+brain feel as if they are being followed, even when 
+they 're not. 
+Psychic Whispers. Any creature with which the el-
+der brain has formed a psychic link hears faint , in-
+comprehensible whispers in the deepest recesses 
+of its mind. This psychic detritus consists of the el-
+ELDER BRAIN 
+Large Aberration (Mind Flayer), Typically Lawful Evil 
+Armor Class 10 
+Hit Points 210 (20dl0 + 100) 
+Speed 5 ft., swim 10 ft. 
+STR 
+15 (+2) DEX 
+10 (+O) CON 
+20 (+5) INT 
+21 (+S) 
+Saving Throws Int +10, Wis +9, Cha+ 12 WIS 
+19 (+4) CHA 
+24 (+7) 
+Skills Arcana +10, Deception +12, Insight +14, Intimidation +12, 
+Persuasion + 12 
+Senses blindsight 120 ft., passive Perception 14 
+Languages understands Common, Deep Speech, and 
+Undercommon but can't speak , telepathy 5 miles 
+Challenge 14 (11,500 XP) Proficiency Bonus +5 
+Creature Sense. The elder brain is aware of creatures within 
+5 miles of it that have an Intelligence score of 4 or higher. It 
+knows the distance and direction to each creature, as well as 
+each one's Intelligence score , but can't sense anything else 
+about it. A creature protected by a mind blank spell , a nond etec-
+tion spell, or similar magic can't be perceived in this manner . 
+Legendary Resistance (3/Day). lfthe elder brain fails a saving 
+throw , it can choose to succeed instead . 
+Magic Resistance. The elder brain has advantage on saving 
+throws against spells and other magical effects . 
+Telepathic Hub. The elder brain can use its telepathy to initiate 
+and maintain telepathic conversations with up to ten creatures 
+at a time. The elder brain can let those creatures telepathically 
+hear each other while connected in this way. 
+ACTIONS 
+Tentacle. Melee Weapon Attack: +7 to hit, reach 30 ft., one 
+target. Hit: 20 (4d8 + 2) bludgeoning damage. If the target is 
+a Huge or smaller creature, it is grappled (escape DC 15) and 
+takes 9 (ld8 + 5) psychic damage at the start of each of its 
+turns until the grapple ends. The elder brain can have up to 
+four targets grappled at a time. 
+Mind Blast (Recharge 5-6). Creatures of the elder brain 's 
+choice within 60 feet ofit must succeed on a DC 18 Intelli -
+gence saving throw or take 32 (5dl0 + 5) psychic damage and 
+be stunned for l minute . A target can repeat the saving throw 
+at the end of each of its turns, ending the effect on itself on 
+a succe ss. 
+120 CHAPTER 2 I BESTIARY der brain's stray thoughts commingled with those 
+of other creatures to which it is linked. 
+Telepathic Eavesdropping. The elder brain can 
+overhear any telepathic conversation within 5 
+miles of it. The creature that initiated the tele-
+pathic conversation makes a DC 18 Wisdom 
+saving throw when telepathic contact is first es-
+tablished. If the save is successful , the creature 
+is aware that something is eavesdropping. The 
+nature of the eavesdropper isn't revealed. 
+If the elder brain dies, these effects imme-
+diately end. 
+Spel/casting (Psionics). The elder brain casts one of the follow-
+ing spells, requiring no spell components and using Intelli-
+gence as the spellcasting ability (spell save DC 18): 
+At will: detect thought s, levitate 
+3/da y: modify memory 
+1/day each : dominate monster , plane shift (self only) 
+BONUS ACTIONS 
+Psychic Link. The elder brain targets one incapacitated creature 
+it senses with its Creature Sense trait and establishes a psychic 
+link with the target . Until the link ends, the elder brain can per-
+ceive everything the target senses. The target becomes aware 
+that something is linked to its mind once it is no longer inca-
+pacitated , and the elder brain can terminate the link at any time 
+(no action required) . The target can use an action on its turn 
+to attempt to break the link, doing so with a successful DC 18 
+Charisma saving throw . On a successful save, the target takes 
+10 (3d6) psychic damage. The link also ends if the target and 
+the elder brain are more than 5 miles apart. The elder brain can 
+form psychic links with up to ten creatures at a time . 
+Sense Thoughts. The elder brain targets a creature with which it 
+has a psychic link. The elder brain gains insight into the target 's 
+emotional state and foremost thoughts (including worries, 
+loves , and hates) . 
+LEGENDARY ACTIONS 
+The elder brain can take 3 legendary actions, choosing from 
+the options below. It can take only one legendary action at a 
+time and only at the end of another creature's turn. The elder 
+brain regains spent legendary actions at the start of its turn. 
+Break Concentration. The elder brain targets one creature 
+within 120 feet ofit with which it has a psychic link. The elder 
+brain breaks the creature's concentration on a spell it has 
+cast. The creature also takes 2 (ld4) psychic damage per 
+level of the spell. 
+Psychic Pulse. The elder brain targets one creature within 120 
+feet ofit with which it has a psychic link. The target and ene-
+mies of the elder brain within 30 feet of target take 10 (3d6) 
+psychic damage. 
+Sever Psychic Link_ The elder brain targets one creature within 
+120 feet of it with which it has a psychic link. The elder brain 
+ends the link, causing the creature to have disadvantage on 
+all ability checks, attack rolls, and saving throws until the end 
+of the creature's next turn. 
+Tentacle (Costs 2 Actions). The elder brain makes one Tenta-
+cle attack .

@@ -1,0 +1,28 @@
+# Phantom
+
+(ollecfi111 the olAh of yo1Ar cAefeAfe'* foe i11 everylAAy 
+objech-whAt A 100& ilAeA. Tho1A1h1 I'& probAbly 11eecA 
+Al'I e11cyclopdiA to holcA All MY A11ti-AIAMirer. 
+TASHA · 
+Many rogues walk a fine line between life and 
+death, risking their own lives and taking the lives of 
+others. While adventuring on that line, some rogues 
+discover a mystical connection to death itself. These 
+rogues take knowledge from the dead and become 
+immersed in negative energy, eventually becoming 
+like ghosts. Thieves' guilds value them as highly ef­
+fective information gatherers and spies. 
+Many shadar-kai of the Shadowfell are masters 
+of these macabre techniques, and some are willing 
+to teach this path. In places like Thay in the Forgot­
+ten Realms and Karrnath in Eberron, where many 
+necromancers practice their craft, a Phantom can 
+become a wizard's confidant and right hand. In tem­
+ples of gods of death, the Phantom might work as 
+an agent to track down those who try to cheat death 
+and to recover knowledge that might otherwise be 
+lost to the grave. 
+How did you discover this grim power? Did 
+you sleep in a graveyard and awaken to your new 
+abilities? Or did you cultivate them in a temple or 
+thieves' guild dedicated to a deity of death?

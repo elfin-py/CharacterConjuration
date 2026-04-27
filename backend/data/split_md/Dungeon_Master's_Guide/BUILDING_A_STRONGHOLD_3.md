@@ -1,0 +1,34 @@
+# Building A Stronghold
+
+Construction 
+Construction 
+Stronghold 
+Cost 
+Time 
+Abbey 
+50,000 gp 
+400 days 
+Guildhall, town or city 
+5,000 gp 
+60 days 
+Keep or small castle 
+50,000 gp 
+400 days 
+Noble estate with manor 
+25,000 gp 
+150 days 
+Outpost or fort 
+15,000 gp 
+100 days 
+Palace or large castle 
+500,000 gp 
+1,200 days 
+Temple 
+50,000 gp 
+400 days 
+Tower, fortified 
+15,000 gp 
+100 days 
+Trading post 
+5,000 gp 
+60 days

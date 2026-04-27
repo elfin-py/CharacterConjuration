@@ -1,0 +1,5 @@
+# Boon Of The Stormborn
+
+You have immunity to lightning and thunder damage. 
+You can also cast thunderwave (save DC 15) at will, 
+without using a spell slot or any components.

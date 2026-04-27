@@ -1,0 +1,11 @@
+# Times
+
+Certain spells (including spells cast as rituais) require
+more time to cast: minutes or even hours. When you
+cast a spell with a casting time longer than a single
+action or reaction, you must spend your action each
+turn casting the spell, and you must maintain your
+concentration while you do so (see "Concentration"
+below). ]f your concentration is broken, the spell fails,
+but you don't expend a spell slot. ]f you want to try
+casting the spell again, you must start over.

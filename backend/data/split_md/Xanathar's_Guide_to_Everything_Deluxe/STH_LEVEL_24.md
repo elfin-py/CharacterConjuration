@@ -1,0 +1,38 @@
+# Sth Level
+
+Control winds (transmutation) 
+Danse macabre (necromancy) 
+Dawn (evocation) 
+Enervation (necromancy) 
+Far step (conjuration) 
+Immolation (evocation) 
+Infernal calling (conjuration) 
+Negative energy flood (necromancy) 
+Skill empowerment (transmutation) 
+Steel wind strike (conjuration) 
+Synaptic static (enchantment) 
+Transmute rock (transmutation) 
+Wall of light (evocation) 
+6TH LEVEL 
+Create homunculus (transmutation) 
+Investiture of flame (transmutation) 
+Investiture of ice (transmutation) 
+Investiture of stone (transmutation) 
+Investiture of wind (transmutation) 
+Mental prison (illusion) 
+Scatter (conjuration) 
+Soul cage (necromancy) 
+Tenser's transformation (transmutation) 
+]TH LEVEL 
+Crown of stars (evocation) 
+Power word pain (enchantment) 
+Whirlwind (evocation) 
+8TH LEVEL 
+Abi-Dalzim's horrid wilting (necromancy) 
+Illusory dragon (illusion) 
+Maddening darkness (evocation) 
+Mighty fortress (conjuration) 
+9TH LEVEL 
+Invulnerability (abjuration) 
+Mass polymorph (transmutation) 
+Psychic scream (enchantment)

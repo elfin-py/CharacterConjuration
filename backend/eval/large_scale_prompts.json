@@ -1,0 +1,198 @@
+{
+  "character": [
+    {
+      "race": "Elf",
+      "dnd_class": "Wizard",
+      "level": 5,
+      "alignment": "Neutral Good",
+      "concept": "Bookish diviner who secretly funds an orphanage"
+    },
+    {
+      "race": "Dwarf",
+      "dnd_class": "Cleric",
+      "level": 3,
+      "alignment": "Lawful Good",
+      "concept": "Temple healer who lost faith during a plague"
+    },
+    {
+      "race": "Halfling",
+      "dnd_class": "Rogue",
+      "level": 4,
+      "alignment": "Chaotic Good",
+      "concept": "Charming pickpocket with a code against the poor"
+    },
+    {
+      "race": "Human",
+      "dnd_class": "Fighter",
+      "level": 6,
+      "alignment": "Lawful Neutral",
+      "concept": "Mercenary captain looking for a final contract"
+    },
+    {
+      "race": "Tiefling",
+      "dnd_class": "Warlock",
+      "level": 5,
+      "alignment": "Chaotic Neutral",
+      "concept": "Pact-bound artist who paints visions of disaster"
+    },
+    {
+      "race": "Half-Elf",
+      "dnd_class": "Bard",
+      "level": 4,
+      "alignment": "Neutral Good",
+      "concept": "Traveling storyteller with a stolen noble identity"
+    },
+    {
+      "race": "Gnome",
+      "dnd_class": "Artificer",
+      "level": 3,
+      "alignment": "Neutral",
+      "concept": "Tinker who builds clockwork familiars"
+    },
+    {
+      "race": "Dragonborn",
+      "dnd_class": "Paladin",
+      "level": 7,
+      "alignment": "Lawful Good",
+      "concept": "Oathbound protector of a border village"
+    },
+    {
+      "race": "Half-Orc",
+      "dnd_class": "Ranger",
+      "level": 5,
+      "alignment": "Neutral",
+      "concept": "Quiet tracker who hunts a specific beast"
+    },
+    {
+      "race": "Human",
+      "dnd_class": "Sorcerer",
+      "level": 4,
+      "alignment": "Chaotic Good",
+      "concept": "Street performer with unstable wild magic"
+    }
+  ],
+  "npc": [
+    {
+      "race": "Human",
+      "alignment": "Neutral",
+      "concept": "Town herbalist with a suspicious ledger"
+    },
+    {
+      "race": "Elf",
+      "alignment": "Chaotic Neutral",
+      "concept": "Wry librarian who trades secrets for favors"
+    },
+    {
+      "race": "Dwarf",
+      "alignment": "Lawful Neutral",
+      "concept": "Blacksmith with a hidden royal sigil"
+    },
+    {
+      "race": "Halfling",
+      "alignment": "Neutral Good",
+      "concept": "Innkeeper who shelters fugitives"
+    },
+    {
+      "race": "Gnome",
+      "alignment": "Chaotic Good",
+      "concept": "Messenger who never tells the whole truth"
+    },
+    {
+      "race": "Tiefling",
+      "alignment": "Neutral",
+      "concept": "Street artist connected to a thieves' guild"
+    },
+    {
+      "race": "Half-Elf",
+      "alignment": "Lawful Good",
+      "concept": "Village teacher and reluctant leader"
+    },
+    {
+      "race": "Human",
+      "alignment": "Chaotic Evil",
+      "concept": "Smooth-talking merchant with cursed goods"
+    },
+    {
+      "race": "Dragonborn",
+      "alignment": "Neutral Good",
+      "concept": "Retired guard with a missing heirloom"
+    },
+    {
+      "race": "Half-Orc",
+      "alignment": "Lawful Neutral",
+      "concept": "Gravedigger who knows everyone\u2019s secrets"
+    }
+  ],
+  "enemy": [
+    {
+      "alignment": "Chaotic Evil",
+      "concept": "Undead knight bound to a ruined chapel",
+      "race": "Human",
+      "dnd_class": null,
+      "level": 5
+    },
+    {
+      "alignment": "Neutral Evil",
+      "concept": "Swamp hag who bargains for memories",
+      "race": "Elf",
+      "dnd_class": null,
+      "level": 6
+    },
+    {
+      "alignment": "Chaotic Neutral",
+      "concept": "Goblin pyromancer leading a raiding band",
+      "race": "Goblin",
+      "dnd_class": "Sorcerer",
+      "level": 3
+    },
+    {
+      "alignment": "Lawful Evil",
+      "concept": "Cult enforcer with infernal chains",
+      "race": "Tiefling",
+      "dnd_class": "Warlock",
+      "level": 4
+    },
+    {
+      "alignment": "Neutral",
+      "concept": "Clockwork sentinel guarding a vault",
+      "race": "Construct",
+      "dnd_class": null,
+      "level": 7
+    },
+    {
+      "alignment": "Chaotic Evil",
+      "concept": "Cave lurker that mimics lost travelers",
+      "race": "Aberration",
+      "dnd_class": null,
+      "level": 4
+    },
+    {
+      "alignment": "Neutral Evil",
+      "concept": "Vampiric duelist stalking nobles",
+      "race": "Elf",
+      "dnd_class": "Fighter",
+      "level": 5
+    },
+    {
+      "alignment": "Chaotic Evil",
+      "concept": "Sea raider captain and her crew",
+      "race": "Human",
+      "dnd_class": "Rogue",
+      "level": 4
+    },
+    {
+      "alignment": "Lawful Evil",
+      "concept": "Temple guardian corrupted by shadow",
+      "race": "Aasimar",
+      "dnd_class": "Paladin",
+      "level": 6
+    },
+    {
+      "alignment": "Neutral",
+      "concept": "Pack alpha with frost breath",
+      "race": "Beast",
+      "dnd_class": null,
+      "level": 3
+    }
+  ]
+}
