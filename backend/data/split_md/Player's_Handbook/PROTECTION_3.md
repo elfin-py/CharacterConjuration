@@ -1,0 +1,7 @@
+# Protection
+
+When a creature you can see attacks a target other
+than you that is within 5 feet of YOtl,you can use your
+reaction to impose disadvantage
+on the attack roll. Vou
+must be wielding a shield.

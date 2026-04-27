@@ -1,0 +1,14 @@
+# School Of Conjuration
+
+As a conjurer, you favor spells that produce objects
+and creatures
+out of thin air. Vou can conjure billowing
+clouds of killing fog or summon creatures
+from
+elsewhere
+to fight on your behalf. As your mastery
+grows, you learn spells of transportation
+and can
+teleport yourself across vast distances,
+even to other
+planes of existence, in an instan!.

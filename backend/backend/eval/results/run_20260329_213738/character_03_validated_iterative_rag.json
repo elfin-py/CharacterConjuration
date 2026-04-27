@@ -1,0 +1,21 @@
+{
+  "prompt_id": "character_03",
+  "entity_type": "character",
+  "condition": "validated_iterative_rag",
+  "payload": {
+    "entity_type": "character",
+    "roll_mode": "auto",
+    "experimental_mode": "validated_iterative_rag",
+    "race": "Half-Orc",
+    "dnd_class": "Ranger",
+    "level": 3,
+    "alignment": "Neutral",
+    "concept": "A quiet tracker focused on monster hunting, survival skills, and practical gear rather than heroics.",
+    "gender": null,
+    "age_group": null,
+    "manual_rolls": null,
+    "ability_assignment": null
+  },
+  "status": 0,
+  "response": "<urlopen error [Errno 1] Operation not permitted>"
+}

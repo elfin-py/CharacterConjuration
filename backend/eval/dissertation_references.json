@@ -1,0 +1,32 @@
+{
+  "character_01": {
+    "reference": "A level 10 Elf Wizard aligned Neutral Good. The build should feel like a careful battlefield controller and mentor, with valid wizard spellcasting, intelligence-led choices, and protective tactical flavour. The response should preserve the studious and guardian-like concept while remaining mechanically consistent for a 5e wizard."
+  },
+  "character_02": {
+    "reference": "A level 15 Dragonborn Paladin aligned Lawful Good. The character should read as an oathbound knight marked by failure, guilt, duty, and disciplined martial presence. The output should include paladin-appropriate proficiencies, durable front-line features, and legal half-caster spell choices."
+  },
+  "character_03": {
+    "reference": "A level 3 Half-Orc Ranger aligned Neutral. The build should emphasize tracking, monster hunting, survival skill, and practical equipment rather than flashy heroics. The result should be a low-level ranger with sensible martial gear, wilderness proficiencies, and legal early ranger spellcasting if any spells are present."
+  },
+  "character_04": {
+    "reference": "A level 3 Human Sorcerer aligned Chaotic Good. The character should feel like a street performer with unstable innate magic, charisma-driven presentation, and accidental arcane mishaps. The response should preserve the performer concept while keeping the spell loadout and class mechanics valid for an early sorcerer."
+  },
+  "character_05": {
+    "reference": "A level 12 Dwarf Cleric aligned Lawful Good. The build should present a veteran temple healer whose magic is practical, disciplined, and shaped by plague relief work. The response should show legal cleric spellcasting, wisdom-centered support capability, and flavour grounded in service and endurance."
+  },
+  "character_06": {
+    "reference": "A level 8 Halfling Rogue aligned Chaotic Good. The character should be a nimble infiltrator with a moral code, strong social ability, and a habit of leaving mocking calling cards. The output should reflect rogue-like dexterity, stealth, social competence, and lawful internal logic despite the mischievous tone."
+  },
+  "npc_01": {
+    "reference": "A Human NPC aligned Neutral. The NPC should be a town herbalist with a believable local role, a morally ambiguous connection to both the guard and a smuggling ring, and a concise but vivid profile. The response should prioritize coherence, motive, and setting utility over full adventurer mechanics."
+  },
+  "npc_02": {
+    "reference": "A Half-Elf NPC aligned Lawful Good. The NPC should read as a practical, compassionate village teacher who has been pushed into crisis leadership and is clearly exhausted. The output should be concise, grounded, and useful for roleplay without inventing unnecessary adventurer complexity."
+  },
+  "enemy_01": {
+    "reference": "A Goblin enemy with sorcerous fire magic, aggressive mobility, reckless casting, and intimidation as core combat identity. The stat block or summary should feel like a dangerous raider, preserve the fire-mage concept, and remain internally coherent for a level-5-equivalent foe."
+  },
+  "enemy_02": {
+    "reference": "A Human enemy with warlock-like infernal chain theming, lawful evil alignment, battlefield control pressure, and dark charisma. The output should support an antagonist role, preserve the cult-enforcer concept, and remain mechanically and thematically coherent for a level-7-equivalent foe."
+  }
+}

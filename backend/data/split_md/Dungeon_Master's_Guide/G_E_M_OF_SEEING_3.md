@@ -1,0 +1,3 @@
+# G E M Of Seeing
+
+CHAPTER 7 I TREASURE

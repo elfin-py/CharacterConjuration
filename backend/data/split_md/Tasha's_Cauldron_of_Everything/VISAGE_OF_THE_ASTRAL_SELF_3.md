@@ -1,0 +1,26 @@
+# Visage Of The Astral Self
+
+6th-level Way of the Astral Self feature 
+You can summon the visage of your astral self. As a 
+bonus action, or as part of the bonus action you take 
+to activate Arms of the Astral Self, you can spend 
+1 ki point to summon this visage for 10 minutes. It 
+vanishes early if you are incapacitated or die. 
+The spectral visage covers your face like a helmet 
+or mask. You determine its appearance. 
+
+
+While the spectral visage is present, you gain the 
+following benefits. 
+Astral Sight. You can see normally in dark­
+ness, both magical and nonmagical, to a distance 
+of 120 feet. 
+Wisdom of the· Spirit. You have advantage 
+on Wisdom (Insight) and Charisma (Intimida­
+tion) checks. 
+Word of the Spirit. When you speak, you can di­
+rect y9ur words to a creature of your choice that you 
+can see within 60 feet of you, making it so only that 
+creature can hear you. Alternatively, you can am­
+plify your voice so that all creatures within 600 feet 
+can hear you.

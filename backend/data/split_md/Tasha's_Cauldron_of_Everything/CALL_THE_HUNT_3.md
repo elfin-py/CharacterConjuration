@@ -1,0 +1,19 @@
+# Call The Hunt
+
+14th-level Path of the Beast feature 
+The beast within you grows so powerful that you 
+can spread its ferocity to others and gain resilience 
+from them joining your hunt. When you enter your 
+rage, you can choose a number of other willing crea­
+tures you can see within 30 feet of you equal to your 
+Constitution modifier (minimum of one creature). 
+You gain 5 temporary hit points for each creature 
+that accepts this feature. Until the rage ends, the 
+chosen creatures can each use the following benefit 
+once on each of their turns: when the creature hits a 
+target with an attack roll and deals damage to it, the 
+creature can roll a d6 and gain a bonus to the dam­
+age equal to the number rolled. 
+You can use this feature a number of times equal 
+to your proficiency bonus, and you regain all ex­
+pended uses when you finish a long rest.

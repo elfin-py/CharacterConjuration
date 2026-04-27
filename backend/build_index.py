@@ -25,16 +25,7 @@ from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 import logging
 
-
-# module-level stub classes so they pickle cleanly
-class NullRetriever:
-    def retrieve(self, _: str):
-        return []
-
-
-class NullIndex:
-    def as_retriever(self, **kwargs):
-        return NullRetriever()
+from index_stubs import NullIndex
 
 
 def collect_markdown(paths):

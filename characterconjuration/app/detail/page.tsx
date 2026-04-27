@@ -14,6 +14,19 @@ type DetailData = {
   stat_block?: string;
 };
 
+function HoverInfo({ label, tooltip }: { label: string; tooltip: string }) {
+  return (
+    <span className="relative inline-flex items-center group">
+      <span className="underline decoration-dotted decoration-[color:var(--accent)]/70 underline-offset-4">
+        {label}
+      </span>
+      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-xs leading-5 text-[color:var(--text)] shadow-xl whitespace-pre-line group-hover:block">
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
 export default function DetailPage() {
   const [data, setData] = useState<DetailData | null>(null);
 
@@ -51,11 +64,50 @@ export default function DetailPage() {
   const ac = parsed.ac ?? parsed.armorClass ?? "—";
   const speed = parsed.speed ?? "—";
   const rawJson = data.sheet_json ?? data.parsed ?? data;
+  const hpProvenance = parsed.hit_point_provenance || {};
+  const acProvenance = parsed.armor_class_provenance || {};
+  const hpTooltip =
+    hpProvenance?.source === "deterministic"
+      ? [
+          `Class: ${hpProvenance.class}`,
+          `Hit die: ${hpProvenance.hit_die}`,
+          `Level: ${hpProvenance.level}`,
+          `Con mod: ${hpProvenance.constitution_modifier >= 0 ? "+" : ""}${hpProvenance.constitution_modifier}`,
+          `Level 1 HP: ${hpProvenance.first_level_hp}`,
+          `Levels after 1st: ${hpProvenance.levels_after_first} x ${hpProvenance.average_hp_per_level_after_first}`,
+          `Total: ${hpProvenance.total}`,
+        ].join("\n")
+      : "HP source unavailable";
+  const acTooltip =
+    acProvenance?.source === "deterministic"
+      ? [
+          `Armor source: ${acProvenance.armor}`,
+          `Base AC: ${acProvenance.base_ac}`,
+          `Dex applied: ${acProvenance.dex_modifier_applied >= 0 ? "+" : ""}${acProvenance.dex_modifier_applied}`,
+          `Shield: ${acProvenance.shield_bonus >= 0 ? "+" : ""}${acProvenance.shield_bonus}`,
+          `Notes: ${(acProvenance.notes || []).join(", ") || "none"}`,
+          `Total: ${acProvenance.total}`,
+        ].join("\n")
+      : "AC source unavailable";
 
   return (
     <main className="min-h-screen text-[color:var(--text)] flex flex-col">
       <NavBar />
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6 flex-1 w-full">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6 flex-1 w-full relative">
+        <Link
+          href="/"
+          aria-label="Back to builder"
+          className="inline-flex self-start lg:absolute lg:left-0 lg:top-1/2 lg:-translate-x-16 lg:-translate-y-1/2 items-center justify-center rounded-full border border-[color:var(--border)] bg-[color:var(--surface-2)] p-3 text-[color:var(--text)] transition hover:bg-[color:var(--surface)]"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 320 512"
+            className="h-4 w-4 fill-current"
+            aria-hidden="true"
+          >
+            <path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z" />
+          </svg>
+        </Link>
         <section className="rounded-2xl cc-card cc-vignette p-6 space-y-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="space-y-2">
@@ -131,12 +183,6 @@ export default function DetailPage() {
                 Download filled 5e sheet
               </button>
             )}
-            <Link
-              href="/"
-              className="pixel-btn rounded-lg bg-[color:var(--surface-2)] border border-[color:var(--border)] px-3 py-2 hover:bg-[color:var(--surface)] transition"
-            >
-              Back
-            </Link>
           </div>
           </div>
         </section>
@@ -172,7 +218,15 @@ export default function DetailPage() {
                   <li><strong>Alignment:</strong> {parsed.alignment || "—"}</li>
                   <li><strong>Gender:</strong> {parsed.gender || "—"}</li>
                   <li><strong>Age group:</strong> {parsed.age_group || "—"}</li>
-                  <li><strong>HP / AC / Speed:</strong> {hp} / {ac} / {speed} ft</li>
+                  <li>
+                    <strong>HP / AC / Speed:</strong>{" "}
+                    <span className="inline-flex gap-2">
+                      <HoverInfo label={`HP ${hp}`} tooltip={hpTooltip} />
+                      <span>/</span>
+                      <HoverInfo label={`AC ${ac}`} tooltip={acTooltip} />
+                      <span>/ {speed} ft</span>
+                    </span>
+                  </li>
                 </ul>
               </div>
               {!isNpc && (

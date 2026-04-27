@@ -1,0 +1,21 @@
+{
+  "prompt_id": "npc_01",
+  "entity_type": "npc",
+  "condition": "validated_iterative_rag",
+  "payload": {
+    "entity_type": "npc",
+    "roll_mode": "auto",
+    "experimental_mode": "validated_iterative_rag",
+    "race": "Human",
+    "dnd_class": null,
+    "level": null,
+    "alignment": "Neutral",
+    "concept": "A town herbalist whose ledger suggests they are supplying both the local guard and a smuggling ring.",
+    "gender": null,
+    "age_group": null,
+    "manual_rolls": null,
+    "ability_assignment": null
+  },
+  "status": 0,
+  "response": "<urlopen error [Errno 1] Operation not permitted>"
+}

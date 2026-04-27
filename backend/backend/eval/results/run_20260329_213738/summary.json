@@ -1,0 +1,100 @@
+{
+  "run_id": "20260329_213738",
+  "backend": "http://127.0.0.1:8000",
+  "results_dir": "backend/eval/results/run_20260329_213738",
+  "conditions": [
+    "no_rag",
+    "rag",
+    "validated_iterative_rag"
+  ],
+  "counts": {
+    "total": 30,
+    "success": 0,
+    "failure": 30
+  },
+  "stats_overall": {
+    "overall": {
+      "sense": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      },
+      "rules_fit": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      },
+      "style": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      }
+    }
+  },
+  "stats_by_condition": {
+    "no_rag": {
+      "sense": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      },
+      "rules_fit": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      },
+      "style": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      }
+    },
+    "rag": {
+      "sense": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      },
+      "rules_fit": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      },
+      "style": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      }
+    },
+    "validated_iterative_rag": {
+      "sense": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      },
+      "rules_fit": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      },
+      "style": {
+        "mean": null,
+        "min": null,
+        "max": null,
+        "n": 0
+      }
+    }
+  },
+  "failure_counts_by_condition": {}
+}

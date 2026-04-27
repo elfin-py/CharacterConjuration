@@ -1,0 +1,13 @@
+fastapi==0.128.1
+fpdf2==2.8.5
+huggingface_hub==1.4.0
+llama-index-core==0.14.13
+llama-index-embeddings-huggingface==0.6.1
+llama-index-instrumentation==0.4.2
+llama-index-llms-huggingface-api==0.6.2
+llama-index-workflows==2.13.1
+pydantic==2.12.5
+PyPDF2==3.0.1
+python-dotenv==1.2.1
+sentence-transformers==5.2.2
+uvicorn==0.40.0

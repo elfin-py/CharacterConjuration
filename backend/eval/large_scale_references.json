@@ -1,0 +1,92 @@
+{
+  "character_01": {
+    "reference": "This reference describes a character for D&D 5e. Race: Elf. Class: Wizard. Level: 5. Alignment: Neutral Good. Concept: Bookish diviner who secretly funds an orphanage A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "character_02": {
+    "reference": "This reference describes a character for D&D 5e. Race: Dwarf. Class: Cleric. Level: 3. Alignment: Lawful Good. Concept: Temple healer who lost faith during a plague A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "character_03": {
+    "reference": "This reference describes a character for D&D 5e. Race: Halfling. Class: Rogue. Level: 4. Alignment: Chaotic Good. Concept: Charming pickpocket with a code against the poor A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "character_04": {
+    "reference": "This reference describes a character for D&D 5e. Race: Human. Class: Fighter. Level: 6. Alignment: Lawful Neutral. Concept: Mercenary captain looking for a final contract A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "character_05": {
+    "reference": "This reference describes a character for D&D 5e. Race: Tiefling. Class: Warlock. Level: 5. Alignment: Chaotic Neutral. Concept: Pact-bound artist who paints visions of disaster A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "character_06": {
+    "reference": "This reference describes a character for D&D 5e. Race: Half-Elf. Class: Bard. Level: 4. Alignment: Neutral Good. Concept: Traveling storyteller with a stolen noble identity A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "character_07": {
+    "reference": "This reference describes a character for D&D 5e. Race: Gnome. Class: Artificer. Level: 3. Alignment: Neutral. Concept: Tinker who builds clockwork familiars A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "character_08": {
+    "reference": "This reference describes a character for D&D 5e. Race: Dragonborn. Class: Paladin. Level: 7. Alignment: Lawful Good. Concept: Oathbound protector of a border village A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "character_09": {
+    "reference": "This reference describes a character for D&D 5e. Race: Half-Orc. Class: Ranger. Level: 5. Alignment: Neutral. Concept: Quiet tracker who hunts a specific beast A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "character_10": {
+    "reference": "This reference describes a character for D&D 5e. Race: Human. Class: Sorcerer. Level: 4. Alignment: Chaotic Good. Concept: Street performer with unstable wild magic A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_01": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Human. Alignment: Neutral. Concept: Town herbalist with a suspicious ledger A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_02": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Elf. Alignment: Chaotic Neutral. Concept: Wry librarian who trades secrets for favors A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_03": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Dwarf. Alignment: Lawful Neutral. Concept: Blacksmith with a hidden royal sigil A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_04": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Halfling. Alignment: Neutral Good. Concept: Innkeeper who shelters fugitives A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_05": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Gnome. Alignment: Chaotic Good. Concept: Messenger who never tells the whole truth A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_06": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Tiefling. Alignment: Neutral. Concept: Street artist connected to a thieves' guild A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_07": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Half-Elf. Alignment: Lawful Good. Concept: Village teacher and reluctant leader A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_08": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Human. Alignment: Chaotic Evil. Concept: Smooth-talking merchant with cursed goods A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_09": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Dragonborn. Alignment: Neutral Good. Concept: Retired guard with a missing heirloom A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "npc_10": {
+    "reference": "This reference describes a npc for D&D 5e. Race: Half-Orc. Alignment: Lawful Neutral. Concept: Gravedigger who knows everyone\u2019s secrets A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_01": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Human. Level: 5. Alignment: Chaotic Evil. Concept: Undead knight bound to a ruined chapel A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_02": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Elf. Level: 6. Alignment: Neutral Evil. Concept: Swamp hag who bargains for memories A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_03": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Goblin. Class: Sorcerer. Level: 3. Alignment: Chaotic Neutral. Concept: Goblin pyromancer leading a raiding band A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_04": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Tiefling. Class: Warlock. Level: 4. Alignment: Lawful Evil. Concept: Cult enforcer with infernal chains A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_05": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Construct. Level: 7. Alignment: Neutral. Concept: Clockwork sentinel guarding a vault A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_06": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Aberration. Level: 4. Alignment: Chaotic Evil. Concept: Cave lurker that mimics lost travelers A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_07": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Elf. Class: Fighter. Level: 5. Alignment: Neutral Evil. Concept: Vampiric duelist stalking nobles A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_08": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Human. Class: Rogue. Level: 4. Alignment: Chaotic Evil. Concept: Sea raider captain and her crew A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_09": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Aasimar. Class: Paladin. Level: 6. Alignment: Lawful Evil. Concept: Temple guardian corrupted by shadow A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  },
+  "enemy_10": {
+    "reference": "This reference describes a enemy for D&D 5e. Race: Beast. Level: 3. Alignment: Neutral. Concept: Pack alpha with frost breath A strong answer should preserve the requested role, broad mechanical identity, and core thematic intent."
+  }
+}

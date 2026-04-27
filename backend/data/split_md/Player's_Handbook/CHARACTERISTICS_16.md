@@ -1,0 +1,6 @@
+# Characteristics
+
+••
+•••
+••
+•••
